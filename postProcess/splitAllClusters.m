@@ -1,6 +1,7 @@
 function [rez, X] = splitAllClusters(rez, flag)
 
 ops = rez.ops;
+markSplitsOnly = getOr(ops, 'markSplitsOnly', false);
 wPCA = gather(ops.wPCA);
 
 ccsplit = rez.ops.AUCsplit;
@@ -23,6 +24,17 @@ iW = squeeze(int32(iW));
 isplit = 1:Nfilt;
 dt = 1/1000;
 nccg = 0;
+
+if markSplitsOnly
+    splitCandidate = false(Nfilt, 1);
+    splitP = zeros(Nfilt, 2); % contains plow phigh
+else
+    if isfield(rez, 'splitLog')
+        splitLog = rez.splitLog;
+    else
+        splitLog = cell(Nfilt, 1);
+    end
+end
 
 while ik<Nfilt    
     if rem(ik, 100)==1
@@ -139,26 +151,37 @@ while ik<Nfilt
     
     % when do I split 
     if nremove > .05 && min(plow,phigh)>ccsplit && min(sum(ilow), sum(~ilow))>300
-       % one cluster stays, one goes
-       Nfilt = Nfilt + 1;
-       
-       rez.dWU(:,iC(:, iW(ik)),Nfilt) = c2;
-       rez.dWU(:,iC(:, iW(ik)),ik)    = c1;
-       rez.W(:,Nfilt,:) = permute(wPCA, [1 3 2]);
-       iW(Nfilt) = iW(ik);
-       isplit(Nfilt) = isplit(ik);
-       
-       rez.st3(isp(ilow), 2)    = Nfilt;
-       rez.simScore(:, Nfilt)   = rez.simScore(:, ik);
-       rez.simScore(Nfilt, :)   = rez.simScore(ik, :);
-       rez.simScore(ik, Nfilt) = 1;
-       rez.simScore(Nfilt, ik) = 1;
-       
-       rez.iNeigh(:, Nfilt)     = rez.iNeigh(:, ik);
-       rez.iNeighPC(:, Nfilt)     = rez.iNeighPC(:, ik);
-       
-       % try this cluster again
-       ik = ik-1;
+       if markSplitsOnly
+           % dont actually split, just note it as a split
+           splitCandidate(ik) = true;
+           splitP(ik, 1) = plow;
+           splitP(ik, 2) = phigh;
+       else
+           % one cluster stays, one goes
+           Nfilt = Nfilt + 1;
+
+           rez.dWU(:,iC(:, iW(ik)),Nfilt) = c2;
+           rez.dWU(:,iC(:, iW(ik)),ik)    = c1;
+           rez.W(:,Nfilt,:) = permute(wPCA, [1 3 2]);
+           iW(Nfilt) = iW(ik);
+           isplit(Nfilt) = isplit(ik);
+
+           rez.st3(isp(ilow), 2)    = Nfilt;
+           rez.simScore(:, Nfilt)   = rez.simScore(:, ik);
+           rez.simScore(Nfilt, :)   = rez.simScore(ik, :);
+           rez.simScore(ik, Nfilt) = 1;
+           rez.simScore(Nfilt, ik) = 1;
+
+           rez.iNeigh(:, Nfilt)     = rez.iNeigh(:, ik);
+           rez.iNeighPC(:, Nfilt)     = rez.iNeighPC(:, ik);
+           
+           % log the split
+           splitLog{ik} = cat(1, splitLog{ik}, Nfilt);
+           splitLog{Nfilt} = ik; % entry Nfilt doesn't exist in splitLog yet
+           
+           % try this cluster again
+           ik = ik-1;
+       end
        
        nsplits = nsplits + 1;
        
@@ -167,7 +190,6 @@ while ik<Nfilt
 end
 
 fprintf('Finished splitting. Found %d splits, checked %d/%d clusters, nccg %d \n', nsplits, ik, Nfilt, nccg)
-
 
 Nfilt = size(rez.W,2);
 Nrank = 3;
@@ -193,6 +215,11 @@ rez.Wphy = cat(1, zeros(1+ops.nt0min, Nfilt, Nrank), rez.W);
 
 rez.isplit = isplit;
 
+if markSplitsOnly
+    rez.splitCandidate = splitCandidate;
+else
+    rez.splitLog = splitLog;
+end
 
 % figure(1)
 % subplot(1,4,1)
