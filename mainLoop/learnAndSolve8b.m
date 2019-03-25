@@ -312,7 +312,7 @@ st3 = st3(1:ntot, :);
 fW = fW(:, 1:ntot);
 fWpc = fWpc(:,:, 1:ntot);
 
-ntot
+ntot;
 
 % [~, isort] = sort(st3(:,1), 'ascend');
 % fW = fW(:, isort);

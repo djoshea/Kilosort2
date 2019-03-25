@@ -37,7 +37,12 @@ for j = 1:Nk
             if Th==ops.Th(1) && Q<.05
                 fcontamination = min(.05, max(.01, Q*2));
             end
-            rez.good(j) = 1;
+            if rez.ops.markSplitsOnly && rez.splitauc(j) >= rez.ops.AUCsplit
+                % don't mark as good if we would have split this cluster
+                rez.good(j) = 0;
+            else
+                rez.good(j) = 1;
+            end
             rez.est_contam_rate(j) = Q;
             Th = Th - .5;
         end        

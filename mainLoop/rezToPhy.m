@@ -143,6 +143,14 @@ if ~isempty(savePath)
     fprintf(fileIDA, 'cluster_id%sAmplitude', char(9));
     fprintf(fileIDA, char([13 10]));
     
+    fileMergeSplit = fopen(fullfile(savePath, 'cluster_MergeSplit.tsv'), 'w');
+    fprintf(fileMergeSplit, 'cluster_id%sMergeSplit', char(9));
+    fprintf(fileMergeSplit, char([13 10]));
+    
+    fileSplitAUC = fopen(fullfile(savePath, 'cluster_SplitAUC.tsv'), 'w');
+    fprintf(fileSplitAUC, 'cluster_id%sSplitAUC', char(9));
+    fprintf(fileSplitAUC, char([13 10]));
+    
     rez.est_contam_rate(isnan(rez.est_contam_rate)) = 1;
     for j = 1:length(rez.good)
         if rez.good(j)
@@ -158,10 +166,34 @@ if ~isempty(savePath)
         fprintf(fileIDA, '%d%s%.1f', j-1, char(9), tempAmps(j));
         fprintf(fileIDA, char([13 10]));
         
+        % construct note indicating merge or split
+        str = '';
+        if rez.mergecount(j) > 1
+            str = [str, sprintf('merged %d; ', rez.mergecount(j))]; %#ok<AGROW>
+        end
+        if rez.ops.markSplitsOnly
+            if rez.split_candidate(j)
+                str = [str, 'split candidate; ']; %#ok<AGROW>
+            end
+        else
+            if rez.splitsrc(j) ~= j
+                str = [str, sprintf('split src %d; ', rez.splitsrc(j) - 1)]; %#ok<AGROW> % templates are written for phy as 0 indexed, so subtract 1
+            end
+        end
+        if length(str) > 2
+            str = str(1:end-2); % strip trailing '; '
+        end
+        fprintf(fileMergeSplit, '%d%s%s', j-1, char(9), str);
+        fprintf(fileMergeSplit, char([13 10]));
+        
+        fprintf(fileSplitAUC, '%d%s%.2f', j-1, char(9), rez.splitauc(j));
+        fprintf(fileSplitAUC, char([13 10]));
     end
     fclose(fileID);
     fclose(fileIDCP);
     fclose(fileIDA);
+    fclose(fileMergeSplit);
+    fclose(fileSplitAUC);
 
      %make params file
     if ~exist(fullfile(savePath,'params.py'),'file')

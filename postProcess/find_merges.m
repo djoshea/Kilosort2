@@ -7,11 +7,14 @@ Xsim = rez.simScore;
 Nk = size(Xsim,1);
 Xsim = Xsim - diag(diag(Xsim));
 
+rez.mergecount = ones(Nk, 1);
+
 % sort by firing rate first
-nspk = zeros(Nk, 1);
-for j = 1:Nk
-    nspk(j) = sum(rez.st3(:,2)==j);        
-end
+% nspk = zeros(Nk, 1);
+% for j = 1:Nk
+%     nspk(j) = sum(rez.st3(:,2)==j);        
+% end
+nspk = accumarray(rez.st3(:, 2), 1); 
 [~, isort] = sort(nspk);
 
 fprintf('initialized spike counts\n')
@@ -43,7 +46,9 @@ for j = 1:Nk
                 % now merge j into i and move on
                 rez.st3(rez.st3(:,2)==isort(j),2) = i;
                 nspk(i) = nspk(i) + nspk(isort(j));
-                fprintf('merged %d into %d \n', isort(j), i)
+%                 fprintf('merged %d into %d \n', isort(j), i)
+                rez.mergecount(i) = rez.mergecount(i) + rez.mergecount(isort(j));
+                rez.mergecount(isort(j)) = 0;
                 % YOU REALLY SHOULD MAKE SURE THE PC CHANNELS MATCH HERE
                 break;
             end

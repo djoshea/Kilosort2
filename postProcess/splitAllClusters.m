@@ -25,20 +25,31 @@ isplit = 1:Nfilt;
 dt = 1/1000;
 nccg = 0;
 
-if markSplitsOnly
-    splitCandidate = false(Nfilt, 1);
-    splitP = zeros(Nfilt, 2); % contains plow phigh
+if isfield(rez, 'split_candidate')
+    splitCandidate = rez.split_candidate;
 else
-    if isfield(rez, 'splitLog')
-        splitLog = rez.splitLog;
-    else
-        splitLog = cell(Nfilt, 1);
-    end
+    splitCandidate = false(Nfilt, 1);
+end
+if isfield(rez, 'splitsrc')
+    splitsrc = rez.splitsrc;
+else
+    splitsrc = (1:Nfilt)';
+end
+if isfield(rez, 'splitauc')
+    splitauc = rez.splitauc;
+else
+    splitauc = zeros(Nfilt, 1);
+end
+
+if markSplitsOnly
+    verb = 'Marked';
+else
+    verb = 'Made';
 end
 
 while ik<Nfilt    
     if rem(ik, 100)==1
-       fprintf('Found %d splits, checked %d/%d clusters, nccg %d \n', nsplits, ik, Nfilt, nccg) 
+       fprintf('%s %d splits, checked %d/%d clusters, nccg %d \n', verb, nsplits, ik, Nfilt, nccg) 
     end
     ik = ik+1;
     
@@ -90,7 +101,7 @@ while ik<Nfilt
         logp(:,2) = -1/2*log(s2) - (x-mu2).^2/(2*s2) + log(1-p);
         
         lMax = max(logp,[],2);
-        logp = logp - lMax;
+        
         
         rs = exp(logp);
         
@@ -148,15 +159,14 @@ while ik<Nfilt
         continue;
     end
     
+    splitauc(ik) = min(plow, phigh);
     
     % when do I split 
     if nremove > .05 && min(plow,phigh)>ccsplit && min(sum(ilow), sum(~ilow))>300
-       if markSplitsOnly
-           % dont actually split, just note it as a split
-           splitCandidate(ik) = true;
-           splitP(ik, 1) = plow;
-           splitP(ik, 2) = phigh;
-       else
+       splitCandidate(ik) = true; % log that this cluster would be / will be split
+       if ~markSplitsOnly
+           % actually do the split
+           
            % one cluster stays, one goes
            Nfilt = Nfilt + 1;
 
@@ -176,8 +186,7 @@ while ik<Nfilt
            rez.iNeighPC(:, Nfilt)     = rez.iNeighPC(:, ik);
            
            % log the split
-           splitLog{ik} = cat(1, splitLog{ik}, Nfilt);
-           splitLog{Nfilt} = ik; % entry Nfilt doesn't exist in splitLog yet
+           splitsrc(Nfilt) = ik;
            
            % try this cluster again
            ik = ik-1;
@@ -189,7 +198,11 @@ while ik<Nfilt
     end    
 end
 
-fprintf('Finished splitting. Found %d splits, checked %d/%d clusters, nccg %d \n', nsplits, ik, Nfilt, nccg)
+if markSplitsOnly
+    fprintf('Finished marking %d splits, checked %d/%d clusters, nccg %d \n', nsplits, ik, Nfilt, nccg);
+else
+    fprintf('Finished with %d splits, checked %d/%d clusters, nccg %d \n', nsplits, ik, Nfilt, nccg)
+end
 
 Nfilt = size(rez.W,2);
 Nrank = 3;
@@ -215,11 +228,12 @@ rez.Wphy = cat(1, zeros(1+ops.nt0min, Nfilt, Nrank), rez.W);
 
 rez.isplit = isplit;
 
-if markSplitsOnly
-    rez.splitCandidate = splitCandidate;
-else
-    rez.splitLog = splitLog;
-end
+% ensure all merge and split arrays end up full size
+splitCandidate = cat(1, splitCandidate, false(Nfilt-numel(splitCandidate), 1));
+rez.split_candidate = splitCandidate;
+rez.splitsrc = splitsrc;
+rez.splitauc = splitauc;
+rez.mergecount = cat(1, rez.mergecount, zeros(Nfilt - numel(rez.mergecount), 1));
 
 % figure(1)
 % subplot(1,4,1)
