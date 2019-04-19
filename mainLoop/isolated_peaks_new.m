@@ -7,8 +7,15 @@ nt0 = ops.nt0;
 
 % loc_range = [3  1];
 % long_range = [30  6];
-smin = my_min(S1, loc_range, [1 2]);
-peaks = single(S1<smin+1e-3 & S1<Th);
+if getOr(ops, 'spikeThreshBothDirs', false)
+    smin = my_min(S1, loc_range, [1 2]);
+    smax = my_min(-S1, loc_range, [1 2]);
+    peaks = single((S1<smin+1e-3 & S1<Th) | (-S1<smax+1e-3 & S1>-Th));
+else
+    % only threshold negative crossings
+    smin = my_min(S1, loc_range, [1 2]);
+    peaks = single(S1<smin+1e-3 & S1<Th);
+end
 
 sum_peaks = my_sum(peaks, long_range, [1 2]);
 peaks = peaks .* (sum_peaks<1.2) .* S1;

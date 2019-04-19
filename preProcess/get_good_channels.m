@@ -55,8 +55,16 @@ while ibatch<=Nbatch
     % determine any threshold crossings
     datr = datr./std(datr,1,1);
     
-    mdat = my_min(datr, 30, 1);
-    ind = find(datr<mdat+1e-3 & datr<ops.spkTh);
+    if getOr(ops, 'spikeThreshBothDirs', false)
+        % threshold from above and from below
+        mdatNeg = my_min(datr, 30, 1);
+        mdatPos = my_min(-datr, 30, 1);
+        ind = find((datr < mdatNeg+1e-3 & datr<ops.spkTh) | ...
+                   (-datr < mdatPos+1e-3 & datr>-ops.spkTh));
+    else
+        mdat = my_min(datr, 30, 1);
+        ind = find(datr<mdat+1e-3 & datr<ops.spkTh);
+    end
     [xi, xj] = ind2sub(size(datr), ind);
     xj(xi<ops.nt0 | xi>NT-ops.nt0) = [];
     if k+numel(xj)>numel(ich)
