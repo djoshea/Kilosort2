@@ -55,7 +55,7 @@ niter   = numel(irounds);
 if irounds(niter - nBatches)~=nhalf
     error('mismatch between number of batches');
 end
-%
+%b
 flag_final = 0;
 flag_resort      = 1;
 
@@ -267,7 +267,7 @@ for ibatch = 1:niter
         
         if ibatch==1
             figHand = figure;
-        else
+        elseif ops.fig
             figure(figHand);
         end
        
