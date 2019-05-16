@@ -10,6 +10,37 @@ NchanNear   = min(ops.Nchan, 32);
 Nnearest    = min(ops.Nchan, 32);
 sigmaMask   = ops.sigmaMask;
 
+% column 6 is our way of tracking merges, this should already be here
+if size(rez.st3, 2) < 6
+    % if not created yet, set clusters (6) to templates (2)
+   rez.st3(:, 6) = rez.st3(:, 2); 
+end
+
+% column 7 is our way of tracking splits, this may not be here already
+if markSplitsOnly
+    if size(rez.st3, 2) < 7
+        % if not created yet, set clusters (7) to clusters(6)
+       rez.st3(:, 7) = rez.st3(:, 6); 
+    end
+    rez.split_dWU;
+    rez.split_W = rez.W;
+    rez.split_simScore = rez.simScopre;
+    rez.split_iNeigh = rez.iNeight;
+           rez.W(:,Nfilt,:) = permute(wPCA, [1 3 2]);
+           iW(Nfilt) = iW(ik);
+           isplit(Nfilt) = isplit(ik);
+
+           rez.st3(isp(ilow), 2)    = Nfilt;
+           rez.simScore(:, Nfilt)   = rez.simScore(:, ik);
+           rez.simScore(Nfilt, ther:)   = rez.simScore(ik, :);
+           rez.simScore(ik, Nfilt) = 1;
+           rez.simScore(Nfilt, ik) = 1;
+
+           rez.iNeigh(:, Nfilt)     = rez.iNeigh(:, ik);
+           rez.iNeighPC(:, Nfilt)     = rez.iNeighPC(:, ik);
+end
+
+
 ik = 0;
 Nfilt = size(rez.W,2);
 nsplits= 0;
@@ -53,7 +84,7 @@ while ik<Nfilt
     end
     ik = ik+1;
     
-    isp = find(rez.st3(:,2)==ik);
+    isp = find(rez.st3(:,6)==ik);
     nSpikes = numel(isp);
     if  nSpikes<300
        continue; 
@@ -178,7 +209,7 @@ while ik<Nfilt
 
            rez.st3(isp(ilow), 2)    = Nfilt;
            rez.simScore(:, Nfilt)   = rez.simScore(:, ik);
-           rez.simScore(Nfilt, :)   = rez.simScore(ik, :);
+           rez.simScore(Nfilt, ther:)   = rez.simScore(ik, :);
            rez.simScore(ik, Nfilt) = 1;
            rez.simScore(Nfilt, ik) = 1;
 
@@ -190,6 +221,9 @@ while ik<Nfilt
            
            % try this cluster again
            ik = ik-1;
+       else
+           % only split it in column 7 
+            
        end
        
        nsplits = nsplits + 1;
