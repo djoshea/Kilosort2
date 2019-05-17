@@ -6,17 +6,22 @@ function rezToPhy(rez, savePath)
 % available (https://github.com/kwikteam/npy-matlab)
 
 
-
-
+markSplitsOnly = getOr(rez.ops, 'markSpitsOnly', false);
+if markSplitsOnly
+    cluster_col = 6; % use post-merge, pre-split cluster assignments
+else
+    cluster_col = 7; % use post split cluster assignments
+end    
 
 % spikeTimes will be in samples, not seconds
 rez.W = gather(single(rez.Wphy));
 rez.U = gather(single(rez.U));
 rez.mu = gather(single(rez.mu));
 
-if size(rez.st3,2)>4
-    rez.st3 = rez.st3(:,1:4);
-end
+
+% if size(rez.st3,2)>4
+%     rez.st3 = rez.st3(:,1:4);
+% end
 
 [~, isort]   = sort(rez.st3(:,1), 'ascend');
 rez.st3      = rez.st3(isort, :);
@@ -39,9 +44,9 @@ end
 spikeTimes = uint64(rez.st3(:,1));
 % [spikeTimes, ii] = sort(spikeTimes);
 spikeTemplates = uint32(rez.st3(:,2));
-if size(rez.st3,2)>4
-    spikeClusters = uint32(1+rez.st3(:,5));
-end
+spikeClusters = uint32(rez.st3(:,cluster_col));
+spikeClustersPostMerge = uint32(1+rez.st3(:,6));
+spikeClustersPostMergeSplit = uint32(1+rez.st3(:,7));
 amplitudes = rez.st3(:,3);
 
 Nchan = rez.ops.Nchan;
@@ -98,15 +103,16 @@ tempAmps(tids) = ta; % because ta only has entries for templates that had at lea
 gain = getOr(rez.ops, 'gain', 1);
 tempAmps = gain*tempAmps'; % for consistency, make first dimension template number
 
+offset = 1;
+
 if ~isempty(savePath)
     
     writeNPY(spikeTimes, fullfile(savePath, 'spike_times.npy'));
-    writeNPY(uint32(spikeTemplates-1), fullfile(savePath, 'spike_templates.npy')); % -1 for zero indexing
-    if size(rez.st3,2)>4
-        writeNPY(uint32(spikeClusters-1), fullfile(savePath, 'spike_clusters.npy')); % -1 for zero indexing
-    else
-        writeNPY(uint32(spikeTemplates-1), fullfile(savePath, 'spike_clusters.npy')); % -1 for zero indexing
-    end
+    writeNPY(uint32(spikeTemplates-offset), fullfile(savePath, 'spike_templates.npy')); % -1 for zero indexing
+    writeNPY(uint32(spikeClusters-offset), fullfile(savePath, 'spike_clusters.npy')); % -1 for zero indexing
+    writeNPY(uint32(spikeClustersPostMerge-offset), fullfile(savePath, 'spike_clusters_postMerge.npy')); % -1 for zero indexing
+    writeNPY(uint32(spikeClustersPostMergeSplit-offset), fullfile(savePath, 'spike_clusters_postMergeSplit.npy')); % -1 for zero indexing
+    
     writeNPY(amplitudes, fullfile(savePath, 'amplitudes.npy'));
     writeNPY(templates, fullfile(savePath, 'templates.npy'));
     writeNPY(templatesInds, fullfile(savePath, 'templates_ind.npy'));
@@ -117,9 +123,9 @@ if ~isempty(savePath)
     writeNPY([xcoords ycoords], fullfile(savePath, 'channel_positions.npy'));
     
     writeNPY(templateFeatures, fullfile(savePath, 'template_features.npy'));
-    writeNPY(templateFeatureInds'-1, fullfile(savePath, 'template_feature_ind.npy'));% -1 for zero indexing
+    writeNPY(templateFeatureInds'-offset, fullfile(savePath, 'template_feature_ind.npy'));% -1 for zero indexing
     writeNPY(pcFeatures, fullfile(savePath, 'pc_features.npy'));
-    writeNPY(pcFeatureInds'-1, fullfile(savePath, 'pc_feature_ind.npy'));% -1 for zero indexing
+    writeNPY(pcFeatureInds'-offset, fullfile(savePath, 'pc_feature_ind.npy'));% -1 for zero indexing
     
     
     writeNPY(whiteningMatrix, fullfile(savePath, 'whitening_mat.npy'));
@@ -154,16 +160,16 @@ if ~isempty(savePath)
     rez.est_contam_rate(isnan(rez.est_contam_rate)) = 1;
     for j = 1:length(rez.good)
         if rez.good(j)
-            fprintf(fileID, '%d%sgood', j-1, char(9));             
+            fprintf(fileID, '%d%sgood', j-offset, char(9));             
         else
-            fprintf(fileID, '%d%smua', j-1, char(9));
+            fprintf(fileID, '%d%smua', j-offset, char(9));
         end
         fprintf(fileID, char([13 10]));           
         
-        fprintf(fileIDCP, '%d%s%.1f', j-1, char(9), rez.est_contam_rate(j)*100);
+        fprintf(fileIDCP, '%d%s%.1f', j-offset, char(9), rez.est_contam_rate(j)*100);
         fprintf(fileIDCP, char([13 10]));
         
-        fprintf(fileIDA, '%d%s%.1f', j-1, char(9), tempAmps(j));
+        fprintf(fileIDA, '%d%s%.1f', j-offset, char(9), tempAmps(j));
         fprintf(fileIDA, char([13 10]));
         
         % construct note indicating merge or split
@@ -171,22 +177,25 @@ if ~isempty(savePath)
         if rez.mergecount(j) > 1
             str = [str, sprintf('merged %d; ', rez.mergecount(j))]; %#ok<AGROW>
         end
-        if rez.ops.markSplitsOnly
+        if markSplitsOnly
             if rez.split_candidate(j)
                 str = [str, 'split candidate; ']; %#ok<AGROW>
             end
         else
-            if rez.splitsrc(j) ~= j
-                str = [str, sprintf('split src %d; ', rez.splitsrc(j) - 1)]; %#ok<AGROW> % templates are written for phy as 0 indexed, so subtract 1
+            if ~isnan(rez.splitsrc(j))
+                str = [str, sprintf('split from %d; ', rez.splitsrc(j) - offset)]; %#ok<AGROW> % templates are written for phy as 0 indexed, so subtract 1
+            end
+            if ~isnan(rez.splitdst(j))
+                str = [str, sprintf('split to %d; ', rez.splitdst(j) - offset)]; %#ok<AGROW> % templates are written for phy as 0 indexed, so subtract 1
             end
         end
         if length(str) > 2
             str = str(1:end-2); % strip trailing '; '
         end
-        fprintf(fileMergeSplit, '%d%s%s', j-1, char(9), str);
+        fprintf(fileMergeSplit, '%d%s%s', j-offset, char(9), str);
         fprintf(fileMergeSplit, char([13 10]));
         
-        fprintf(fileSplitAUC, '%d%s%.2f', j-1, char(9), rez.splitauc(j));
+        fprintf(fileSplitAUC, '%d%s%.2f', j-offset, char(9), rez.splitauc(j));
         fprintf(fileSplitAUC, char([13 10]));
     end
     fclose(fileID);

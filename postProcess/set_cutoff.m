@@ -2,22 +2,21 @@ function rez = set_cutoff(rez)
 
 ops = rez.ops;
 dt = 1/1000;
-
-if size(rez.st3, 2) < 6
-    % if not created yet, set clusters (6) to templates (2)
-   rez.st3(:, 6) = rez.st3(:, 2); 
-end
-
-Nk = max(rez.st3(:, 6));
-
 markSplitsOnly = getOr(rez.ops, 'markSpitsOnly', false);
+
+if markSplitsOnly
+    cluster_col = 6; % use post-merge, pre-split cluster assignments
+else
+    cluster_col = 7; % use post split cluster assignments
+end
+Nk = max(rez.st3(:, cluster_col)); 
 
 spike_valid = true(size(rez.st3, 1), 1);
 
 % sort by firing rate first
 rez.good = zeros(Nk, 1);
 for j = 1:Nk
-    ix = find(rez.st3(:,6)==j);        
+    ix = find(rez.st3(:,cluster_col)==j);        
     ss = rez.st3(ix,1)/ops.fs;
     if numel(ss)==0
         continue;
@@ -46,12 +45,7 @@ for j = 1:Nk
             if Th==ops.Th(1) && Q<.05
                 fcontamination = min(.05, max(.01, Q*2));
             end
-            if markSplitsOnly && rez.splitauc(j) >= rez.ops.AUCsplit
-                % don't mark as good if we would have split this cluster
-                rez.good(j) = 0;
-            else
-                rez.good(j) = 1;
-            end
+            rez.good(j) = 1;
             rez.est_contam_rate(j) = Q;
             Th = Th - .5;
         end        
@@ -67,7 +61,6 @@ for j = 1:Nk
 %        fprintf('%d \n', j) 
     end
 end
-% eliminate spikes with id = 0
 
 % we sometimes get NaNs, why?
 rez.est_contam_rate(isnan(rez.est_contam_rate)) = 1;
@@ -79,9 +72,7 @@ rez.st3_cutoff_invalid = rez.st3(ix, :);
 rez.cProj_cutoff_invalid = rez.cProj(ix, :);
 rez.cProjPC_cutoff_invalid = rez.cProjPC(ix, :, :);
 
-% mark them as invalid, but don't delete them
-rez.st3_valid = ix;
-
+% now delete them
 rez.st3(ix, :) = [];
 if ~isempty(rez.cProj)
     rez.cProj(ix, :) = [];
