@@ -216,7 +216,8 @@ for ibatch = 1:niter
 
     end
 
-    if ibatch>niter-nBatches        
+    if ibatch>niter-nBatches  
+        rez.dWUA(:,:,:,k) = gather(dWU);
         rez.WA(:,:,:,k) = gather(W);
         rez.UA(:,:,:,k) = gather(U);
         rez.muA(:,k) = gather(mu);
@@ -251,6 +252,7 @@ for ibatch = 1:niter
 
     if ibatch==niter-nBatches        
         st3 = zeros(1e7, 5);
+        rez.dWUA = zeros(nt0, Nchan, Nfilt, nBatches, 'single'); % spike average by template, by batch
         rez.WA = zeros(nt0, Nfilt, Nrank,nBatches,  'single');
         rez.UA = zeros(Nchan, Nfilt, Nrank,nBatches,  'single');
         rez.muA = zeros(Nfilt, nBatches,  'single');

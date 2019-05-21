@@ -1,9 +1,6 @@
-function [rez, X] = splitAllClusters(rez, flag)
-% splits templates in column 2 and clusters in column 7, based on current cluster assignments (post-merge) in column 6 of rez.st3
-% markSplitsOnly does nothing here, it will matter later when picking either cluster assingments from 6 or 7
-
+function rez = splitAllClusters(rez, flag)
+% copies original template column 2 to 6 (if not present already) and splits template assignments in column 6
 ops = rez.ops;
-markSplitsOnly = getOr(ops, 'markSplitsOnly', false);
 wPCA = gather(ops.wPCA);
 
 ccsplit = rez.ops.AUCsplit;
@@ -12,17 +9,12 @@ NchanNear   = min(ops.Nchan, 32);
 Nnearest    = min(ops.Nchan, 32);
 sigmaMask   = ops.sigmaMask;
 
-% column 6 is our way of tracking merges, this should already be here
+% column 6 is our way of tracking splits, this may not be here already
 if size(rez.st3, 2) < 6
-    % if not created yet, set clusters (6) to templates (2)
+    % if not created yet, set split templates (6) to templates(2)
    rez.st3(:, 6) = rez.st3(:, 2); 
 end
-
-% column 7 is our way of tracking splits, this may not be here already
-if size(rez.st3, 2) < 7
-    % if not created yet, set clusters (7) to clusters(6)
-   rez.st3(:, 7) = rez.st3(:, 6); 
-end
+template_col = 6;
 
 ik = 0;
 Nfilt = size(rez.W,2);
@@ -35,7 +27,7 @@ ops.nt0min = getOr(ops, 'nt0min', 20);
 [~, iW] = max(abs(rez.dWU(ops.nt0min, :, :)), [], 2);
 iW = squeeze(int32(iW));
 
-isplit = 1:Nfilt;
+isplit = (1:Nfilt)';
 dt = 1/1000;
 nccg = 0;
 
@@ -60,19 +52,13 @@ else
     splitauc = zeros(Nfilt, 1);
 end
 
-if markSplitsOnly
-    verb = 'Marked';
-else
-    verb = 'Made';
-end
-
 while ik<Nfilt    
     if rem(ik, 100)==1
-       fprintf('%s %d splits, checked %d/%d clusters, nccg %d \n', verb, nsplits, ik, Nfilt, nccg) 
+       fprintf('Made %d splits, checked %d/%d clusters, nccg %d \n', nsplits, ik, Nfilt, nccg) 
     end
     ik = ik+1;
     
-    isp = find(rez.st3(:,7)==ik); % use column 7 here since that's where splits will be registered
+    isp = find(rez.st3(:,template_col)==ik); % use column 7 here since that's where splits will be registered
     nSpikes = numel(isp);
     if  nSpikes<300
        continue; 
@@ -165,7 +151,7 @@ while ik<Nfilt
         continue;
     end
     
-    c1  = wPCA * reshape(mean(clp0(ilow,:),1), 3, []);
+    c1  = wPCA * reshape(mean(clp0( ilow,:),1), 3, []); % clp0 is nspikes x 96
     c2  = wPCA * reshape(mean(clp0(~ilow,:),1), 3, []);
     cc = corrcoef(c1, c2);
     n1 =sqrt(sum(c1(:).^2));
@@ -183,20 +169,18 @@ while ik<Nfilt
     % when do I split 
     if nremove > .05 && min(plow,phigh)>ccsplit && min(sum(ilow), sum(~ilow))>300
         splitCandidate(ik) = true; % log that this cluster would be / will be split
-        % actually do the split on the template
-
-        % one template stays, one goes
+        
+        % actually do the split on the template, one template stays, one goes
         Nfilt = Nfilt + 1;
 
-        rez.dWU(:,iC(:, iW(ik)),Nfilt) = c2;
-        rez.dWU(:,iC(:, iW(ik)),ik)    = c1;
+        rez.dWU(:,iC(:, iW(ik)),Nfilt) = c2; % 61 x 32
+        rez.dWU(:,iC(:, iW(ik)),ik)    = c1; % 61x 32
         rez.W(:,Nfilt,:) = permute(wPCA, [1 3 2]);
         iW(Nfilt) = iW(ik);
         isplit(Nfilt) = isplit(ik);
-
-        % we change the template assignments in column 2 and cluster assignments in 7
-        rez.st3(isp(ilow), 2)    = Nfilt;
-        rez.st3(isp(ilow), 7)    = Nfilt;
+      
+        % we change the template assignments in column 6
+        rez.st3(isp(ilow), template_col)    = Nfilt;
         rez.simScore(:, Nfilt)   = rez.simScore(:, ik);
         rez.simScore(Nfilt, :)   = rez.simScore(ik, :);
         rez.simScore(ik, Nfilt) = 1;
@@ -211,17 +195,11 @@ while ik<Nfilt
 
         % try this cluster again
         ik = ik-1;
-        nsplits = nsplits + 1;
-
-        X{nsplits} = x;       
+        nsplits = nsplits + 1; 
     end
 end
 
-if markSplitsOnly
-    fprintf('Finished marking %d splits, checked %d/%d clusters, nccg %d \n', nsplits, ik, Nfilt, nccg);
-else
-    fprintf('Finished with %d splits, checked %d/%d clusters, nccg %d \n', nsplits, ik, Nfilt, nccg)
-end
+fprintf('Finished with %d splits, checked %d/%d clusters, nccg %d \n', nsplits, ik, Nfilt, nccg)
 
 % zeros get filled in when the array is expanded
 splitsrc(splitsrc == 0) = NaN;
@@ -239,6 +217,8 @@ Params     = double([0 Nfilt 0 0 size(rez.W,1) Nnearest ...
 
 [WtW, iList] = getMeWtW(single(rez.W), single(rez.U), Nnearest);
 rez.iList = iList;
+
+rez.splitorigtemplate = isplit;
 
 isplit = rez.simScore==1;
 rez.simScore = gather(max(WtW, [], 3));
