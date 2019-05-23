@@ -1,6 +1,7 @@
 function rez = splitAllClusters(rez, flag)
 % copies original template column 2 to 6 (if not present already) and splits template assignments in column 6
 ops = rez.ops;
+markSplitsOnly = getOr(ops, 'markSplitsOnly', false);
 wPCA = gather(ops.wPCA);
 
 ccsplit = rez.ops.AUCsplit;
@@ -20,11 +21,11 @@ ik = 0;
 Nfilt = size(rez.W,2);
 nsplits= 0;
 
-[iC, mask, C2C] = getClosestChannels(rez, sigmaMask, NchanNear);
+[iC, mask, C2C] = getClosestChannels(rez, sigmaMask, NchanNear); % iC is 32 x nCh listing the 32 closest channels to each other channel
 
 ops.nt0min = getOr(ops, 'nt0min', 20);
 
-[~, iW] = max(abs(rez.dWU(ops.nt0min, :, :)), [], 2);
+[~, iW] = max(abs(rez.dWU(ops.nt0min, :, :)), [], 2); % iW indicates for each template, on which channel dWU (the average of the spikes) is largest 
 iW = squeeze(int32(iW));
 
 isplit = (1:Nfilt)';
@@ -32,9 +33,9 @@ dt = 1/1000;
 nccg = 0;
 
 if isfield(rez, 'split_candidate')
-    splitCandidate = rez.split_candidate;
+    split_candidate = rez.split_candidate;
 else
-    splitCandidate = false(Nfilt, 1);
+    split_candidate = false(Nfilt, 1);
 end
 if isfield(rez, 'splitsrc')
     splitsrc = rez.splitsrc;
@@ -50,6 +51,11 @@ if isfield(rez, 'splitauc')
     splitauc = rez.splitauc;
 else
     splitauc = zeros(Nfilt, 1);
+end
+if isfield(rez, 'split_orig_template')
+    split_orig_template = rez.split_orig_template;
+else
+    split_orig_template = (1:Nfilt)';
 end
 
 while ik<Nfilt    
@@ -168,17 +174,22 @@ while ik<Nfilt
     
     % when do I split 
     if nremove > .05 && min(plow,phigh)>ccsplit && min(sum(ilow), sum(~ilow))>300
-        splitCandidate(ik) = true; % log that this cluster would be / will be split
+        split_candidate(ik) = true;
+        if markSplitsOnly
+            continue;
+        end
         
         % actually do the split on the template, one template stays, one goes
         Nfilt = Nfilt + 1;
 
-        rez.dWU(:,iC(:, iW(ik)),Nfilt) = c2; % 61 x 32
-        rez.dWU(:,iC(:, iW(ik)),ik)    = c1; % 61x 32
+        ch = rez.iNeighPC(:, ik); % which channels do we overwrite, according to which channels the projections from cProjPC were originally defined on (which is where c1, c2 come from)
+        rez.dWU(:,ch,Nfilt) = c2; % nt0 x NchanNear
+        rez.dWU(:,ch,ik)    = c1; % nt0 x NchanNear
         rez.W(:,Nfilt,:) = permute(wPCA, [1 3 2]);
         iW(Nfilt) = iW(ik);
-        isplit(Nfilt) = isplit(ik);
-      
+        split_orig_template(Nfilt) = split_orig_template(ik);
+        split_candidate(Nfilt) = false;
+        
         % we change the template assignments in column 6
         rez.st3(isp(ilow), template_col)    = Nfilt;
         rez.simScore(:, Nfilt)   = rez.simScore(:, ik);
@@ -186,8 +197,8 @@ while ik<Nfilt
         rez.simScore(ik, Nfilt) = 1;
         rez.simScore(Nfilt, ik) = 1;
 
-        rez.iNeigh(:, Nfilt)     = rez.iNeigh(:, ik);
-        rez.iNeighPC(:, Nfilt)     = rez.iNeighPC(:, ik);       
+        rez.iNeigh(:, Nfilt)    = rez.iNeigh(:, ik);
+        rez.iNeighPC(:, Nfilt)  = rez.iNeighPC(:, ik);       
 
         % log the split
         splitsrc(Nfilt) = ik;
@@ -199,46 +210,51 @@ while ik<Nfilt
     end
 end
 
-fprintf('Finished with %d splits, checked %d/%d clusters, nccg %d \n', nsplits, ik, Nfilt, nccg)
+if markSplitsOnly
+    fprintf('Found %d split candidates, checked %d/%d clusters, nccg %d \n', nnz(split_candidate), ik, Nfilt, nccg);
+else
+    fprintf('Finished with %d splits, checked %d/%d clusters, nccg %d \n', nsplits, ik, Nfilt, nccg)
+end
 
-% zeros get filled in when the array is expanded
-splitsrc(splitsrc == 0) = NaN;
-splitdst(splitdst == 0) = NaN;
+rez.split_candidate = split_candidate;
 
-Nfilt = size(rez.W,2);
-Nrank = 3;
-Nchan = ops.Nchan;
-Params     = double([0 Nfilt 0 0 size(rez.W,1) Nnearest ...
-    Nrank 0 0 Nchan NchanNear ops.nt0min 0]);
+if ~markSplitsOnly
+    % zeros get filled in when the array is expanded
+    splitsrc(splitsrc == 0) = NaN;
+    splitdst(splitdst == 0) = NaN;
 
-% [rez.W, rez.U, rez.mu] = mexSVDsmall(Params, rez.dWU, rez.W, iC-1, iW-1);
-[Ka, Kb] = getKernels(ops, 10, 1);
-[rez.W, rez.U, rez.mu] = mexSVDsmall2(Params, rez.dWU, rez.W, iC-1, iW-1, Ka, Kb);
+    Nfilt = size(rez.W,2);
+    Nrank = 3;
+    Nchan = ops.Nchan;
+    Params     = double([0 Nfilt 0 0 size(rez.W,1) Nnearest ...
+        Nrank 0 0 Nchan NchanNear ops.nt0min 0]);
 
-[WtW, iList] = getMeWtW(single(rez.W), single(rez.U), Nnearest);
-rez.iList = iList;
+    % [rez.W, rez.U, rez.mu] = mexSVDsmall(Params, rez.dWU, rez.W, iC-1, iW-1);
+    [Ka, Kb] = getKernels(ops, 10, 1);
+    [rez.W, rez.U, rez.mu] = mexSVDsmall2(Params, rez.dWU, rez.W, iC-1, iW-1, Ka, Kb);
 
-rez.splitorigtemplate = isplit;
+    [WtW, iList] = getMeWtW(single(rez.W), single(rez.U), Nnearest);
+    rez.iList = iList;
 
-isplit = rez.simScore==1;
-rez.simScore = gather(max(WtW, [], 3));
-rez.simScore(isplit) = 1;
+    isplit = rez.simScore==1;
+    rez.simScore = gather(max(WtW, [], 3));
+    rez.simScore(isplit) = 1;
 
-rez.iNeigh   = gather(iList(:, 1:Nfilt));
-rez.iNeighPC    = gather(iC(:, iW(1:Nfilt)));
+    rez.iNeigh   = gather(iList(:, 1:Nfilt));
+    rez.iNeighPC    = gather(iC(:, iW(1:Nfilt)));
 
-prepad = ops.nt0 - 2*ops.nt0min - 1;
-rez.Wphy = cat(1, zeros(prepad, Nfilt, Nrank), rez.W);
+    prepad = ops.nt0 - 2*ops.nt0min - 1;
+    rez.Wphy = cat(1, zeros(prepad, Nfilt, Nrank), rez.W);
 
-rez.isplit = isplit;
-
-% ensure all merge and split arrays end up full size
-splitCandidate = cat(1, splitCandidate, false(Nfilt-numel(splitCandidate), 1));
-rez.split_candidate = splitCandidate;
-rez.splitsrc = splitsrc;
-rez.splitdst = cat(1, splitdst, nan(Nfilt - numel(splitdst), 1));
-rez.splitauc = cat(1, splitauc, nan(Nfilt - numel(splitauc), 1));
-rez.mergecount = cat(1, rez.mergecount, zeros(Nfilt - numel(rez.mergecount), 1));
+    % ensure all merge and split arrays end up full size
+    rez.split_orig_template = split_orig_template;
+    rez.splitsrc = splitsrc;
+    rez.splitdst = cat(1, splitdst, nan(Nfilt - numel(splitdst), 1));
+    rez.splitauc = cat(1, splitauc, nan(Nfilt - numel(splitauc), 1));
+    if isfield(rez, 'mergecount')
+        rez.mergecount = cat(1, rez.mergecount, zeros(Nfilt - numel(rez.mergecount), 1));
+    end
+end
 
 % figure(1)
 % subplot(1,4,1)

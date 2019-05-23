@@ -1,27 +1,16 @@
-
 function rezToPhy(rez, savePath)
 % pull out results from kilosort's rez to either return to workspace or to
 % save in the appropriate format for the phy GUI to run on. If you provide
 % a savePath it should be a folder, and you will need to have npy-matlab
 % available (https://github.com/kwikteam/npy-matlab)
 
-
-markSplitsOnly = getOr(rez.ops, 'markSpitsOnly', false);
-if markSplitsOnly
-    cluster_col = 6; % use post-merge, pre-split cluster assignments
-else
-    cluster_col = 7; % use post split cluster assignments
-end    
+cluster_col = 7; % use post split cluster assignments
+markSplitsOnly = getOr(rez.ops, 'markSplitsOnly', false);
 
 % spikeTimes will be in samples, not seconds
 rez.W = gather(single(rez.Wphy));
 rez.U = gather(single(rez.U));
 rez.mu = gather(single(rez.mu));
-
-
-% if size(rez.st3,2)>4
-%     rez.st3 = rez.st3(:,1:4);
-% end
 
 [~, isort]   = sort(rez.st3(:,1), 'ascend');
 rez.st3      = rez.st3(isort, :);
@@ -43,10 +32,9 @@ end
 
 spikeTimes = uint64(rez.st3(:,1));
 % [spikeTimes, ii] = sort(spikeTimes);
-spikeTemplates = uint32(rez.st3(:,2));
+spikeTemplatesPreSplit = uint32(rez.st3(:,2));
+spikeTemplates = uint32(rez.st3(:,6));
 spikeClusters = uint32(rez.st3(:,cluster_col));
-spikeClustersPostMerge = uint32(1+rez.st3(:,6));
-spikeClustersPostMergeSplit = uint32(1+rez.st3(:,7));
 amplitudes = rez.st3(:,3);
 
 Nchan = rez.ops.Nchan;
@@ -109,9 +97,8 @@ if ~isempty(savePath)
     
     writeNPY(spikeTimes, fullfile(savePath, 'spike_times.npy'));
     writeNPY(uint32(spikeTemplates-offset), fullfile(savePath, 'spike_templates.npy')); % -1 for zero indexing
+    writeNPY(uint32(spikeTemplatesPreSplit-offset), fullfile(savePath, 'spike_templates_preSplit.npy')); % -1 for zero indexing
     writeNPY(uint32(spikeClusters-offset), fullfile(savePath, 'spike_clusters.npy')); % -1 for zero indexing
-    writeNPY(uint32(spikeClustersPostMerge-offset), fullfile(savePath, 'spike_clusters_postMerge.npy')); % -1 for zero indexing
-    writeNPY(uint32(spikeClustersPostMergeSplit-offset), fullfile(savePath, 'spike_clusters_postMergeSplit.npy')); % -1 for zero indexing
     
     writeNPY(amplitudes, fullfile(savePath, 'amplitudes.npy'));
     writeNPY(templates, fullfile(savePath, 'templates.npy'));
@@ -126,7 +113,6 @@ if ~isempty(savePath)
     writeNPY(templateFeatureInds'-offset, fullfile(savePath, 'template_feature_ind.npy'));% -1 for zero indexing
     writeNPY(pcFeatures, fullfile(savePath, 'pc_features.npy'));
     writeNPY(pcFeatureInds'-offset, fullfile(savePath, 'pc_feature_ind.npy'));% -1 for zero indexing
-    
     
     writeNPY(whiteningMatrix, fullfile(savePath, 'whitening_mat.npy'));
     writeNPY(whiteningMatrixInv, fullfile(savePath, 'whitening_mat_inv.npy'));
@@ -182,10 +168,10 @@ if ~isempty(savePath)
                 str = [str, 'split candidate; ']; %#ok<AGROW>
             end
         else
-            if ~isnan(rez.splitsrc(j))
+            if ~isnan(rez.splitsrc(j)) && rez.splitsrc(j) ~= j
                 str = [str, sprintf('split from %d; ', rez.splitsrc(j) - offset)]; %#ok<AGROW> % templates are written for phy as 0 indexed, so subtract 1
             end
-            if ~isnan(rez.splitdst(j))
+            if ~isnan(rez.splitdst(j)) && rez.splitdst(j) ~= j
                 str = [str, sprintf('split to %d; ', rez.splitdst(j) - offset)]; %#ok<AGROW> % templates are written for phy as 0 indexed, so subtract 1
             end
         end

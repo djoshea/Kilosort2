@@ -1,10 +1,14 @@
 function exportRezToMat(rez, fname)
 
 % drop features from rez, too large
-rez = clearFields(rez, {'temp', 'cProj', 'cProjPC', 'st3_cutoff_invalid', 'cProj_cutoff_invalid', 'cProjPC_cutoff_invalid'});
+rez = clearFields(rez, {'temp', 'cProj', 'cProjPC', 'cProj_cutoff_invalid', 'cProjPC_cutoff_invalid', 'dWUA'});
 if isfield(rez, 'ops') && isfield(rez.ops, 'gui')
     rez.ops.gui = [];
 end
+
+% sort spike times
+[~, isort]   = sort(rez.st3(:,1), 'ascend');
+rez.st3      = rez.st3(isort, :);
 
 % gather all gpuArrays
 flds = fieldnames(rez);

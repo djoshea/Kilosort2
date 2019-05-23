@@ -2,12 +2,13 @@ function rez = set_cutoff(rez)
 
 ops = rez.ops;
 dt = 1/1000;
-markSplitsOnly = getOr(rez.ops, 'markSpitsOnly', false);
 
-if markSplitsOnly
-    cluster_col = 6; % use post-merge, pre-split cluster assignments
-else
+if size(rez.st3, 2) == 7
     cluster_col = 7; % use post split cluster assignments
+elseif size(rez.st3, 2) == 6
+    cluster_col = 6;
+else
+    cluster_col = 2;
 end
 Nk = max(rez.st3(:, cluster_col)); 
 
@@ -67,6 +68,7 @@ rez.est_contam_rate(isnan(rez.est_contam_rate)) = 1;
 
 % hold onto the invalid spikes in .st3_cutoff_invalid before removing them
 % ix = rez.st3(:, 6)==0;
+fprintf('Invalidating %d / %d spikes (%.2f %%)\n', nnz(~spike_valid), numel(spike_valid), 100*nnz(~spike_valid) / numel(spike_valid));
 ix = ~spike_valid;
 rez.st3_cutoff_invalid = rez.st3(ix, :);
 rez.cProj_cutoff_invalid = rez.cProj(ix, :);
