@@ -31,4 +31,4 @@ function s = clearFields(s, flds)
             s = rmfield(s, fld);
         end
     end
-end
+end  

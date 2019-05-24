@@ -218,43 +218,47 @@ end
 
 rez.split_candidate = split_candidate;
 
-if ~markSplitsOnly
+if markSplitsOnly
+    splitsrc = nan(Nfilt, 1);
+    splitdst = nan(Nfilt, 1);
+else
     % zeros get filled in when the array is expanded
     splitsrc(splitsrc == 0) = NaN;
-    splitdst(splitdst == 0) = NaN;
-
-    Nfilt = size(rez.W,2);
-    Nrank = 3;
-    Nchan = ops.Nchan;
-    Params     = double([0 Nfilt 0 0 size(rez.W,1) Nnearest ...
-        Nrank 0 0 Nchan NchanNear ops.nt0min 0]);
-
-    % [rez.W, rez.U, rez.mu] = mexSVDsmall(Params, rez.dWU, rez.W, iC-1, iW-1);
-    [Ka, Kb] = getKernels(ops, 10, 1);
-    [rez.W, rez.U, rez.mu] = mexSVDsmall2(Params, rez.dWU, rez.W, iC-1, iW-1, Ka, Kb);
-
-    [WtW, iList] = getMeWtW(single(rez.W), single(rez.U), Nnearest);
-    rez.iList = iList;
-
-    isplit = rez.simScore==1;
-    rez.simScore = gather(max(WtW, [], 3));
-    rez.simScore(isplit) = 1;
-
-    rez.iNeigh   = gather(iList(:, 1:Nfilt));
-    rez.iNeighPC    = gather(iC(:, iW(1:Nfilt)));
-
-    prepad = ops.nt0 - 2*ops.nt0min - 1;
-    rez.Wphy = cat(1, zeros(prepad, Nfilt, Nrank), rez.W);
-
-    % ensure all merge and split arrays end up full size
-    rez.split_orig_template = split_orig_template;
-    rez.splitsrc = splitsrc;
-    rez.splitdst = cat(1, splitdst, nan(Nfilt - numel(splitdst), 1));
-    rez.splitauc = cat(1, splitauc, nan(Nfilt - numel(splitauc), 1));
-    if isfield(rez, 'mergecount')
-        rez.mergecount = cat(1, rez.mergecount, zeros(Nfilt - numel(rez.mergecount), 1));
-    end
+    splitdst(splitdst == 0) = NaN; 
 end
+
+Nfilt = size(rez.W,2);
+Nrank = 3;
+Nchan = ops.Nchan;
+Params     = double([0 Nfilt 0 0 size(rez.W,1) Nnearest ...
+    Nrank 0 0 Nchan NchanNear ops.nt0min 0]);
+
+% [rez.W, rez.U, rez.mu] = mexSVDsmall(Params, rez.dWU, rez.W, iC-1, iW-1);
+[Ka, Kb] = getKernels(ops, 10, 1);
+[rez.W, rez.U, rez.mu] = mexSVDsmall2(Params, rez.dWU, rez.W, iC-1, iW-1, Ka, Kb);
+
+[WtW, iList] = getMeWtW(single(rez.W), single(rez.U), Nnearest);
+rez.iList = iList;
+
+isplit = rez.simScore==1;
+rez.simScore = gather(max(WtW, [], 3));
+rez.simScore(isplit) = 1;
+
+rez.iNeigh   = gather(iList(:, 1:Nfilt));
+rez.iNeighPC    = gather(iC(:, iW(1:Nfilt)));
+
+prepad = ops.nt0 - 2*ops.nt0min - 1;
+rez.Wphy = cat(1, zeros(prepad, Nfilt, Nrank), rez.W);
+
+% ensure all merge and split arrays end up full size
+rez.split_orig_template = split_orig_template;
+rez.splitsrc = splitsrc;
+rez.splitdst = cat(1, splitdst, nan(Nfilt - numel(splitdst), 1));
+rez.splitauc = cat(1, splitauc, nan(Nfilt - numel(splitauc), 1));
+if isfield(rez, 'mergecount')
+    rez.mergecount = cat(1, rez.mergecount, zeros(Nfilt - numel(rez.mergecount), 1));
+end
+
 
 % figure(1)
 % subplot(1,4,1)

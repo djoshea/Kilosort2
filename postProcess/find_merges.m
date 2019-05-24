@@ -63,15 +63,16 @@ for j = 1:Nk
                 rez.mergecount(i) = rez.mergecount(i) + rez.mergecount(isort(j));
                 rez.mergecount(isort(j)) = 0;
                 rez.mergedst(isort(j)) = i;
-                rez.splitdst(rez.splitdst == isort(j)) = i;
-                if rez.splitsrc(i) == isort(j)
-                    % we're re-merging a split
-                    rez.splitsrc(i) = NaN;
+                if isfield(rez, 'splitdst') && isfield(rez, 'splitsrc')
+                    rez.splitdst(rez.splitdst == isort(j)) = i;
+                    if rez.splitsrc(i) == isort(j)
+                        % we're re-merging a split
+                        rez.splitsrc(i) = NaN;
+                    end
+                    rez.splitsrc(rez.splitsrc == isort(j)) = rez.splitsrc(i);
+                    rez.splitsrc(isort(j)) = NaN;
+                    rez.splitdst(isort(j)) = NaN;
                 end
-                rez.splitsrc(rez.splitsrc == isort(j)) = rez.splitsrc(i);
-                rez.splitsrc(isort(j)) = NaN;
-                rez.splitdst(isort(j)) = NaN;
-                
                 
                 % YOU REALLY SHOULD MAKE SURE THE PC CHANNELS MATCH HERE
                 nmerge = nmerge + 1;
