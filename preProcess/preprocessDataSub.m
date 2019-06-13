@@ -81,6 +81,7 @@ else
     [b1, a1] = butter(3, ops.fshigh/ops.fs*2, 'high');
 end
 
+prog = ProgressBar(Nbatch, 'Preprocessing batches');
 for ibatch = 1:Nbatch
     offset = max(0, ops.twind + 2*NchanTOT*((NT - ops.ntbuff) * (ibatch-1) - 2*ops.ntbuff));
     if offset==0
@@ -131,7 +132,9 @@ for ibatch = 1:Nbatch
         datcpu  = gather_try(int16(datr));
         fwrite(fidW, datcpu, 'int16');
     end
+    prog.update(ibatch);
 end
+prog.finish();
 
 Wrot        = gather_try(Wrot);
 rez.Wrot    = Wrot;
