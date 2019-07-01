@@ -92,7 +92,12 @@ ndrop = zeros(1,2);
 m0 = ops.minFR * ops.NT/ops.fs;
 
 for ibatch = 1:niter
+    % irounds is the list of indices we traverse through sorted batch list (isortbatches) --> this loop stored as korder
+    % k is the actual batch in the unsorted data (using isortbatches)
+    % there are nBatches total batches, and niter = 2*nBatches
     
+    % we loop over batches first for optimization (starting at half going right, then starting at 1 back 
+    % so irounds goes nhalf --> nBatches, nBatches --> nhalf, nhalf-1 --> 1, nhalf-->nbatches
     %     k = irounds(ibatch);
     korder = irounds(ibatch);
     k = isortbatches(korder);

@@ -11,6 +11,8 @@ Nchan = rez.ops.Nchan;
 xc = rez.xc;
 yc = rez.yc;
 
+trust_data_mask = getOr(ops, 'trust_data_mask', []);
+
 % load data into patches, filter, compute covariance
 if isfield(ops,'fslow')&&ops.fslow<ops.fs/2
     [b1, a1] = butter(3, [ops.fshigh/ops.fs,ops.fslow/ops.fs]*2, 'bandpass');
@@ -50,6 +52,13 @@ while ibatch<=Nbatch
     dataRAW = dataRAW';
     dataRAW = single(dataRAW);
     dataRAW = dataRAW(:, chanMap);
+    
+    % only select trusted timepoints
+    if ~isempty(trust_data_mask)
+        inds_this_batch = max(0, ops.tstart + (NT-ops.ntbuff)*(ibatch-1)-ops.ntbuff) + (1 : size(dataRaw, 1));
+        trust_this_batch = trust_data_mask(:, inds_this_batch);
+        dataRaw = dataRaw(trust_this_batch, :);
+    end
     
     % subtract the mean from each channel
     dataRAW = dataRAW - mean(dataRAW, 1);

@@ -24,7 +24,7 @@ if getOr(ops, 'minfr_goodchannels', .1)>0
     % determine bad channels
     fprintf('Time %3.0fs. Determining good channels.. \n', toc);
 
-    igood = get_good_channels(ops, chanMap);
+    igood = get_good_channels(ops, chanMap); % trusted samples only
     xc = xc(igood);
     yc = yc(igood);
     kcoords = kcoords(igood);
@@ -62,7 +62,7 @@ rez.ops.chanMap = chanMap;
 fprintf('Time %3.0fs. Computing whitening matrix.. \n', toc);
 
 % this requires removing bad channels first
-Wrot = get_whitening_matrix(rez);
+Wrot = get_whitening_matrix(rez); % trusted samples only
 
 
 fprintf('Time %3.0fs. Loading raw data and applying filters... \n', toc);

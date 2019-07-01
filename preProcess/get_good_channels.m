@@ -6,6 +6,8 @@ NchanTOT = ops.NchanTOT;
 NT = ops.NT;
 Nchan = numel(chanMap);
 
+trust_data_mask = getOr(ops, 'trust_data_mask', []);
+
 % load data into patches, filter, compute covariance
 if isfield(ops,'fslow')&&ops.fslow<ops.fs/2
     [b1, a1] = butter(3, [ops.fshigh/ops.fs,ops.fslow/ops.fs]*2, 'bandpass');
@@ -28,15 +30,22 @@ while ibatch<=Nbatch
     if isempty(buff)
         break;
     end
-    
+
     if ops.GPU
         dataRAW = gpuArray(buff);
     else
         dataRAW = buff;
     end
-    dataRAW = dataRAW';
+    dataRAW = dataRAW'; % NT x nChan
     dataRAW = single(dataRAW);
     dataRAW = dataRAW(:, chanMap);
+    
+    % only select trusted timepoints
+    if ~isempty(trust_data_mask)
+        inds_this_batch = ops.tstart + NT*(ibatch-1) + (1 : size(dataRaw, 1));
+        trust_this_batch = trust_data_mask(:, inds_this_batch);
+        dataRaw = dataRaw(trust_this_batch, :);
+    end
     
     % subtract the mean from each channel
     dataRAW = dataRAW - mean(dataRAW, 1);
