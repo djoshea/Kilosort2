@@ -19,12 +19,18 @@ ops.Nbatch = Nbatch;
 [chanMap, xc, yc, kcoords, NchanTOTdefault] = loadChanMap(ops.chanMap);
 ops.NchanTOT = getOr(ops, 'NchanTOT', NchanTOTdefault);
 
+% if ops.useRAM
+%     rez.DATA = loadBinaryDataIntoRAM(ops);
+% else
+%     rez.DATA = [];
+% end
+
 if getOr(ops, 'minfr_goodchannels', .1)>0
     
     % determine bad channels
     fprintf('Time %3.0fs. Determining good channels.. \n', toc);
 
-    igood = get_good_channels(ops, chanMap); % trusted samples only
+    igood = get_good_channels(ops, chanMap, rez.DATA); % trusted samples only
     xc = xc(igood);
     yc = yc(igood);
     kcoords = kcoords(igood);
@@ -72,6 +78,8 @@ if ~ops.useRAM
     fidW        = fopen(ops.fproc,   'w');
     DATA = [];
 else
+    gbData = NT * rez.ops.Nchan * Nbatch * 2 / 2^30;
+    fprintf('Allocating %.2f GiB of DATA in RAM, this make take some time\n', gbData);
     DATA = zeros(NT, rez.ops.Nchan, Nbatch, 'int16');    
 end
 % load data into patches, filter, compute covariance
@@ -80,6 +88,8 @@ if isfield(ops,'fslow')&&ops.fslow<ops.fs/2
 else
     [b1, a1] = butter(3, ops.fshigh/ops.fs*2, 'high');
 end
+
+distrust_data_mask = getOr(ops, 'distrust_data_mask', []);
 
 prog = ProgressBar(Nbatch, 'Preprocessing batches');
 for ibatch = 1:Nbatch
@@ -109,8 +119,17 @@ for ibatch = 1:Nbatch
     dataRAW = single(dataRAW);
     dataRAW = dataRAW(:, chanMap);
     
+    % only select trusted timepoints
+    if ~isempty(distrust_data_mask)
+        inds_this_batch = max(0, ops.tstart + (NT-ops.ntbuff)*(ibatch-1)-ops.ntbuff) + (1 : size(dataRAW, 1));
+        distrust_this_batch = distrust_data_mask(inds_this_batch);
+        dataRAW_trusted = dataRAW(~distrust_this_batch, :);
+    else
+        dataRAW_trusted = dataRAW;
+    end
+    
     % subtract the mean from each channel
-    dataRAW = dataRAW - mean(dataRAW, 1);    
+    dataRAW = dataRAW - mean(dataRAW_trusted, 1);    
     
     datr = filter(b1, a1, dataRAW);
     datr = flipud(datr);
@@ -127,7 +146,7 @@ for ibatch = 1:Nbatch
     datr    = datr * Wrot;
     
     if ops.useRAM
-        DATA(:,:,ibatch) = gather_try(datr);
+        DATA(:,:,ibatch) = gather_try(datr); %#ok<AGROW>
     else
         datcpu  = gather_try(int16(datr));
         fwrite(fidW, datcpu, 'int16');
@@ -145,4 +164,4 @@ fclose(fid);
 fprintf('Time %3.0fs. Finished preprocessing %d batches. \n', toc, Nbatch);
 
 rez.temp.Nbatch = Nbatch;
-
+rez.DATA = DATA;
