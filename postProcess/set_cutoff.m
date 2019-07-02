@@ -70,9 +70,16 @@ rez.est_contam_rate(isnan(rez.est_contam_rate)) = 1;
 % ix = rez.st3(:, 6)==0;
 fprintf('Invalidating %d / %d spikes (%.2f %%)\n', nnz(~spike_valid), numel(spike_valid), 100*nnz(~spike_valid) / numel(spike_valid));
 ix = ~spike_valid;
-rez.st3_cutoff_invalid = rez.st3(ix, :);
-rez.cProj_cutoff_invalid = rez.cProj(ix, :);
-rez.cProjPC_cutoff_invalid = rez.cProjPC(ix, :, :);
+
+if isfield(rez, 'st3_cutoff_invalid')
+    rez.st3_cutoff_invalid = cat(1, rez.st3_cutoff_invalid, rez.st3(ix, :));
+    rez.cProj_cutoff_invalid = cat(1, rez.cProj_cutoff_invalid, rez.cProj(ix, :));
+    rez.cProjPC_cutoff_invalid = cat(1, rez.cProjPC(ix, :, :));
+else
+    rez.st3_cutoff_invalid = rez.st3(ix, :);
+    rez.cProj_cutoff_invalid = rez.cProj(ix, :);
+    rez.cProjPC_cutoff_invalid = rez.cProjPC(ix, :, :);
+end
 
 % now delete them
 rez.st3(ix, :) = [];
