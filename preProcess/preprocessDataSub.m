@@ -19,12 +19,6 @@ ops.Nbatch = Nbatch;
 [chanMap, xc, yc, kcoords, NchanTOTdefault] = loadChanMap(ops.chanMap);
 ops.NchanTOT = getOr(ops, 'NchanTOT', NchanTOTdefault);
 
-% if ops.useRAM
-%     rez.DATA = loadBinaryDataIntoRAM(ops);
-% else
-%     rez.DATA = [];
-% end
-
 if getOr(ops, 'minfr_goodchannels', .1)>0
     
     % determine bad channels
@@ -79,8 +73,8 @@ if ~ops.useRAM
     DATA = [];
 else
     gbData = NT * rez.ops.Nchan * Nbatch * 2 / 2^30;
-    fprintf('Allocating %.2f GiB of DATA in RAM, this make take some time\n', gbData);
-    DATA = zeros(NT, rez.ops.Nchan, Nbatch, 'int16');    
+    fprintf('Allocating %.2f GiB of data in RAM, this make take some time\n', gbData);
+    DATA = zeros(NT, rez.ops.Nchan, Nbatch, 'int16');
 end
 % load data into patches, filter, compute covariance
 if isfield(ops,'fslow')&&ops.fslow<ops.fs/2
@@ -90,6 +84,11 @@ else
 end
 
 distrust_data_mask = getOr(ops, 'distrust_data_mask', []);
+if isempty(distrust_data_mask)
+    distrust_batched = [];
+else
+    distrust_batched = true(NT, Nbatch);
+end
 
 prog = ProgressBar(Nbatch, 'Preprocessing batches');
 for ibatch = 1:Nbatch
@@ -119,9 +118,10 @@ for ibatch = 1:Nbatch
     dataRAW = single(dataRAW);
     dataRAW = dataRAW(:, chanMap);
     
-    % only select trusted timepoints
+    % only select trusted timepoints for mean computation
     if ~isempty(distrust_data_mask)
         inds_this_batch = max(0, ops.tstart + (NT-ops.ntbuff)*(ibatch-1)-ops.ntbuff) + (1 : size(dataRAW, 1));
+        inds_this_batch = inds_this_batch(inds_this_batch <= numel(distrust_data_mask));
         distrust_this_batch = distrust_data_mask(inds_this_batch);
         dataRAW_trusted = dataRAW(~distrust_this_batch, :);
     else
@@ -142,6 +142,9 @@ for ibatch = 1:Nbatch
     end
     
     datr = datr(ioffset + (1:NT),:);
+    inds_keep = ioffset + (1:NT);
+    inds_keep = inds_keep(inds_keep < numel(distrust_this_batch));
+    distrust_batched(1:numel(inds_keep), ibatch) = distrust_this_batch(inds_keep); %#ok<AGROW>
     
     datr    = datr * Wrot;
     
@@ -158,10 +161,13 @@ prog.finish();
 Wrot        = gather_try(Wrot);
 rez.Wrot    = Wrot;
 
-fclose(fidW);
+if ~ops.useRAM
+    fclose(fidW);
+end
 fclose(fid);
 
 fprintf('Time %3.0fs. Finished preprocessing %d batches. \n', toc, Nbatch);
 
 rez.temp.Nbatch = Nbatch;
 rez.DATA = DATA;
+rez.distrust_batched = distrust_batched;

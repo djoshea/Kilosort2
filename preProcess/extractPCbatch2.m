@@ -15,12 +15,21 @@ Nbatch      = rez.temp.Nbatch;
 NT  	= ops.NT;
 batchstart = 0:NT:NT*Nbatch;
 
-fid = fopen(ops.fproc, 'r');
+if ~ops.useRAM
+    fid = fopen(ops.fproc, 'r');
 
-offset = 2 * ops.Nchan*batchstart(ibatch);
-fseek(fid, offset, 'bof');
-dat = fread(fid, [NT ops.Nchan], '*int16');
-fclose(fid);
+    offset = 2 * ops.Nchan*batchstart(ibatch);
+    fseek(fid, offset, 'bof');
+    dat = fread(fid, [NT ops.Nchan], '*int16');
+    fclose(fid);
+else
+    dat = rez.DATA(:, :, ibatch);
+end
+
+if ~isempty(rez.distrust_batched)
+    distrust_this_batch = rez.distrust_batched(:, ibatch);
+    dat = dat(~distrust_this_batch, :);
+end
 
 % move data to GPU and scale it
 if ops.GPU

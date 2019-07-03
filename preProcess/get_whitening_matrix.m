@@ -56,6 +56,7 @@ while ibatch<=Nbatch
     % only select trusted timepoints
     if ~isempty(distrust_data_mask)
         inds_this_batch = max(0, ops.tstart + (NT-ops.ntbuff)*(ibatch-1)-ops.ntbuff) + (1 : size(dataRAW, 1));
+        inds_this_batch = inds_this_batch(inds_this_batch <= numel(distrust_data_mask));
         distrust_this_batch = distrust_data_mask(inds_this_batch);
         dataRAW = dataRAW(~distrust_this_batch, :);
     end

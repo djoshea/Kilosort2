@@ -11,12 +11,24 @@ batchstart = 0:NT:NT*Nbatch;
 
 % extract the PCA projections
 CC = zeros(ops.nt0);
-fid = fopen(ops.fproc, 'r');
+
+if ~rez.ops.useRAM
+    fid = fopen(ops.fproc, 'r');
+end
 
 for ibatch = 1:100:Nbatch
-    offset = 2 * ops.Nchan*batchstart(ibatch);
-    fseek(fid, offset, 'bof');
-    dat = fread(fid, [NT ops.Nchan], '*int16');
+    if ~rez.ops.useRAM
+        offset = 2 * ops.Nchan*batchstart(ibatch);
+        fseek(fid, offset, 'bof');
+        dat = fread(fid, [NT ops.Nchan], '*int16');
+    else
+        dat = rez.DATA(:, :, ibatch);
+    end
+    
+    if ~isempty(rez.distrust_batched)
+        distrust_this_batch = rez.distrust_batched(:, ibatch);
+        dat = dat(~distrust_this_batch, :);
+    end
     
     % move data to GPU and scale it
     if ops.GPU
@@ -27,7 +39,6 @@ for ibatch = 1:100:Nbatch
     dataRAW = single(dataRAW);
     dataRAW = dataRAW / ops.scaleproc;
     
-    
     % find isolated spikes
     [row, col, mu] = isolated_peaks_new(dataRAW, ops);
     
@@ -37,7 +48,9 @@ for ibatch = 1:100:Nbatch
     CC = CC + gather(c * c')/1e3;
     
 end
-fclose(fid);
+if ~rez.ops.useRAM
+    fclose(fid);
+end
 
 [U Sv V] = svdecon(CC);
 

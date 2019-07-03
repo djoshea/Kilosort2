@@ -74,7 +74,7 @@ ix = ~spike_valid;
 if isfield(rez, 'st3_cutoff_invalid')
     rez.st3_cutoff_invalid = cat(1, rez.st3_cutoff_invalid, rez.st3(ix, :));
     rez.cProj_cutoff_invalid = cat(1, rez.cProj_cutoff_invalid, rez.cProj(ix, :));
-    rez.cProjPC_cutoff_invalid = cat(1, rez.cProjPC(ix, :, :));
+    rez.cProjPC_cutoff_invalid = cat(1, rez.cProjPC_cutoff_invalid, rez.cProjPC(ix, :, :));
 else
     rez.st3_cutoff_invalid = rez.st3(ix, :);
     rez.cProj_cutoff_invalid = rez.cProj(ix, :);
@@ -85,5 +85,7 @@ end
 rez.st3(ix, :) = [];
 if ~isempty(rez.cProj)
     rez.cProj(ix, :) = [];
+end
+if ~isempty(rez.cProjPC)
     rez.cProjPC(ix, :,:) = [];
 end
