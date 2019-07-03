@@ -44,6 +44,7 @@ iC = getClosestChannels(rez, ops.sigmaMask, NchanNear);
 Whs = gpuArray.ones(Nfilt, nBatches, 'int32');
 
 tic
+prog = ProgressBar(nBatches, 'Clustering batches');
 for ibatch = 1:nBatches            
     [uproj, call] = extractPCbatch2(rez, wPCA, min(nBatches-1, ibatch), iC);  
     
@@ -92,14 +93,18 @@ for ibatch = 1:nBatches
         ns(:, ibatch)      = nsp;
         Whs(:, ibatch)     = int32(Wheights);
     else
+        prog.pause_for_output();
         warning('data batch #%d only had %d spikes \n', ibatch, size(uproj,2))
     end    
     i0 = i0 + Nfilt;    
     
+    prog.update(ibatch);
     if rem(ibatch, 500)==1
+        prog.pause_for_output();
         fprintf('time %2.2f, pre clustered %d / %d batches \n', toc, ibatch, nBatches)
     end
 end
+prog.finish();
 
 
 tic
@@ -112,6 +117,7 @@ ccb = gpuArray.zeros(nBatches, 'single');
 d1 = gpuArray.zeros(nBatches, 'single');
 
 % [ncoefs, Nfilt, nBatches] = size(Ws);
+prog = ProgressBar(nBatches, 'Determining batch sort order');
 for ibatch = 1:nBatches 
     Wh0 = single(Whs(:, ibatch));    
     W0  = Ws(:, :, ibatch);    
@@ -141,10 +147,13 @@ for ibatch = 1:nBatches
     ccb(ibatch,:) = cct;
     d1(ibatch,:) = imin;
     
+    prog.update(ibatch);
     if rem(ibatch, 500)==1
+        prog.pause_for_output();
         fprintf('time %2.2f, compared %d / %d batches \n', toc, ibatch, nBatches)
     end
 end
+prog.finish();
 
 ccb0 = zscore(ccb, 1, 1);
 ccb0 = ccb0 + ccb0';
@@ -153,22 +162,23 @@ rez.ccb = gather(ccb0);
 
 % sort by new manifold algorithm
 [ccb1, iorig] = sortBatches2(ccb0);
-
-figure;
-subplot(1,2,1)
-imagesc(ccb0, [-5 5]); drawnow
-xlabel('batches')
-ylabel('batches')
-title('batch to batch distance')
-
-subplot(1,2,2)
-imagesc(ccb1, [-5 5]); drawnow
-xlabel('sorted batches')
-ylabel('sorted batches')
-title('AFTER sorting')
-
 rez.iorig = gather(iorig);
 rez.ccbsort = gather(ccb1);
+
+if ops.fig
+    figure;
+    subplot(1,2,1)
+    imagesc(ccb0, [-5 5]); drawnow
+    xlabel('batches')
+    ylabel('batches')
+    title('batch to batch distance')
+
+    subplot(1,2,2)
+    imagesc(ccb1, [-5 5]); drawnow
+    xlabel('sorted batches')
+    ylabel('sorted batches')
+    title('AFTER sorting')
+end
 
 fprintf('time %2.2f, Re-ordered %d batches. \n', toc, nBatches)
 %% 
