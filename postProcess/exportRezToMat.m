@@ -1,9 +1,9 @@
 function exportRezToMat(rez, fname)
 
 % drop features from rez, too large
-rez = clearFields(rez, {'temp', 'cProj', 'cProjPC', 'cProj_cutoff_invalid', 'cProjPC_cutoff_invalid', 'dWUA'});
-if isfield(rez, 'ops') && isfield(rez.ops, 'gui')
-    rez.ops.gui = [];
+rez = clearFields(rez, {'temp', 'cProj', 'cProjPC', 'cProj_cutoff_invalid', 'cProjPC_cutoff_invalid', 'dWUA', 'DATA', 'distrust_batched'});
+if isfield(rez, 'ops')
+    rez.ops = clearFields(rez.ops, {'gui', 'distrust_data_mask'});
 end
 
 % sort spike times

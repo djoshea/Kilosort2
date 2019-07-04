@@ -72,6 +72,9 @@ fprintf('Invalidating %d / %d spikes (%.2f %%)\n', nnz(~spike_valid), numel(spik
 ix = ~spike_valid;
 
 if isfield(rez, 'st3_cutoff_invalid')
+    if size(rez.st3_cutoff_invalid, 2) < size(rez.st3, 2)
+        rez.st3_cutoff_invalid = cat(2, rez.st3_cutoff_invalid, zeros(size(rez.st3_cutoff_invalid, 1), size(rez.st3, 2) - size(rez.st3_cutoff_invalid, 2)));
+    end
     rez.st3_cutoff_invalid = cat(1, rez.st3_cutoff_invalid, rez.st3(ix, :));
     rez.cProj_cutoff_invalid = cat(1, rez.cProj_cutoff_invalid, rez.cProj(ix, :));
     rez.cProjPC_cutoff_invalid = cat(1, rez.cProjPC_cutoff_invalid, rez.cProjPC(ix, :, :));
