@@ -29,8 +29,6 @@ end
 nspk = accumarray(rez.st3(:, cluster_col), 1); 
 [~, isort] = sort(nspk);
 
-fprintf('initialized spike counts\n')
-
 if ~flag
    rez.R_CCG = Inf * ones(Nk);
    rez.Q_CCG = Inf * ones(Nk);
@@ -38,10 +36,13 @@ if ~flag
 end
 
 nmerge = 0;
+prog = ProgressBar(Nk, 'Searching for cluster auto-merges');
 for j = 1:Nk
+    prog.update(j);
     s1 = rez.st3(rez.st3(:,cluster_col)==isort(j), 1)/ops.fs;
     if numel(s1)~=nspk(isort(j))
-        fprintf('lost track of spike counts')
+        prog.pause_for_output();
+        warning('Lost track of spike counts on cluster %d', isort(j))
     end    
     [ccsort, ix] = sort(Xsim(isort(j),:) .* (nspk'>numel(s1)), 'descend');
     ienu = find(ccsort<.5, 1) - 1;
@@ -87,6 +88,7 @@ for j = 1:Nk
         end
     end   
 end
+prog.finish();
 
 if ~flag
     rez.R_CCG  = min(rez.R_CCG , rez.R_CCG');

@@ -58,11 +58,14 @@ else
     split_orig_template = (1:Nfilt)';
 end
 
+prog = ProgressBar(Nfilt, 'Searching for clusters to split');
 while ik<Nfilt    
     if rem(ik, 100)==1
+       prog.pause_for_output();
        fprintf('Made %d splits, checked %d/%d clusters, nccg %d \n', nsplits, ik, Nfilt, nccg) 
     end
     ik = ik+1;
+    prog.update(ik);
     
     isp = find(rez.st3(:,template_col)==ik); % use column 7 here since that's where splits will be registered
     nSpikes = numel(isp);
@@ -209,6 +212,7 @@ while ik<Nfilt
         nsplits = nsplits + 1; 
     end
 end
+prog.finish();
 
 if markSplitsOnly
     fprintf('Found %d split candidates, checked %d/%d clusters, nccg %d \n', nnz(split_candidate), ik, Nfilt, nccg);

@@ -148,7 +148,7 @@ for ibatch = 1:niter
     end
     dataRAW = single(gpuArray(dat))/ ops.scaleproc;
 
-    if ibatch > iter_finalize && ~isempty(rez.distrust_batched)
+    if ibatch < iter_finalize && ~isempty(rez.distrust_batched)
         % in initial pass or first iteration of final pass where templates are finalized, don't use distrusted samples
         distrust_this_batch = rez.distrust_batched(:, k);
         dataRAW = dataRAW(~distrust_this_batch, :);
@@ -319,15 +319,12 @@ for ibatch = 1:niter
         fprintf('%s: %2.2f sec, %d / %d iterations, %d units, nspks: %2.4f, mu: %2.4f, nst0: %d, merges: %2.4f, %2.4f \n', ...
             state, toc, ibatch, niter, Nfilt, sum(nsp), median(mu), numel(st0), ndrop)
 
-%         keyboard;
-        
-        if ibatch==1
-            figHand = figure;
-        elseif ops.fig
-            figure(figHand);
-        end
-       
-       if ops.fig
+        if ops.fig
+            if ibatch==1
+                figHand = figure;
+            elseif ops.fig
+                figure(figHand);
+            end
            subplot(2,2,1)
            imagesc(W(:,:,1))
            title('Temporal Components')

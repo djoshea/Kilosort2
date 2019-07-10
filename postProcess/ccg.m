@@ -1,4 +1,10 @@
 function [K, Qi, Q00, Q01, Ri] = ccg(st1, st2, nbins, tbin)
+% K is the cross-correlogram for time bins tbin.*(-nbins:nbins)
+% Qi is rate of spike pairs lying within tbin * i of each other for i = 1:10
+% Q00 is rate of spikes occurring in the outer CCG
+% Q01 is max of rate of spikes occuring in the left or right central CCG (st2 just leading or just lagging)
+% R00 is max of outer, left central, and right central CCG
+% Ri is something like the propability of seeing a spikes at tbins from 0 in the CCG assuming Poission statistics?
 
 st1 = sort(st1(:));
 st2 = sort(st2(:));
@@ -40,11 +46,11 @@ while j<=numel(st2)
     j = j+1;
 end
 
-irange1 = [2:nbins/2 (3/2*nbins+1):(2*nbins)];
+irange1 = [2:nbins/2 (3/2*nbins+1):(2*nbins)]; % outside of central CCG
 Q00 = sum(K(irange1)) / (numel(irange1)*tbin* numel(st1) * numel(st2)/T);
 
-irange2 = [nbins+1-50:nbins-10];
-irange3 = [nbins+12:nbins+50];
+irange2 = [nbins+1-50:nbins-10]; % left of central CCG
+irange3 = [nbins+12:nbins+50]; % right of central CCG
 
 R00 = max(mean(K(irange2)), mean(K(irange3)));
 R00 = max(R00, mean(K(irange1)));

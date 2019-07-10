@@ -43,7 +43,7 @@ rez.muA = zeros(Nfilt, nBatches, 'single');
 batch = isortbatches(rez.st3(:, 5)); % this spike belongs to the batch at this index of isortbatches
 template = rez.st3(:, 6); % this spike belongs to this template
 
-fprintf('Computing batchwise, template-wise feature proj averages...\n');
+prog = ProgressBar(nBatches, 'Updating batchwise, template-wise feature proj averages...\n');
 
 % cProjPC is Nfilt x Nrank x NchanNear. We want to average those rows belonging to template iT and batch iB
 % and store them as batch_cluster_avgs(:, :, iT, iB). for this, subs has size [size(cProjPC, 1), 4]
@@ -81,10 +81,9 @@ for iB = 1:nBatches
     rez.muA(:,iB) = gather(single(muA_b));
     rez.dWUA(:, :, :, iB) = gather(dWU_batch);
     
-    if mod(iB, 100) == 0
-        fprintf('Finished updating batch %d / %d\n', iB, nBatches);
-    end
+    prog.update(iB);
 end
+prog.finish();
 
 fprintf('Updating decomposition of batchwise W and U\n');
 rez.W_a = zeros(nt0 * Nrank, nKeep, Nfilt, 'single');
