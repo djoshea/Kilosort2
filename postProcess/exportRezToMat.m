@@ -1,7 +1,23 @@
-function exportRezToMat(rez, fname)
+function exportRezToMat(rez, savePath)
+
+if nargin < 2
+    savePath = rez.ops.saveDir;
+end
+
+% write cutoff spikes to separate files to keep rez.mat sufficiently small
+if isfield(rez, 'cProj_cutoff_invalid') && ~isempty(rez.cProj_cutoff_invalid)
+    templateFeatures = rez.cProj_cutoff_invalid;
+    writeNPY(templateFeatures, fullfile(savePath, 'template_features_cutoff.npy'));
+end
+
+if isfield(rez, 'cProjPC_cutoff_invalid') && ~isempty(rez.cProjPC_cutoff_invalid)
+    pcFeatures = rez.cProjPC_cutoff_invalid;
+    writeNPY(pcFeatures, fullfile(savePath, 'pc_features_cutoff.npy'));
+end
 
 % drop features from rez, too large
-rez = clearFields(rez, {'temp', 'cProj', 'cProjPC', 'cProj_cutoff_invalid', 'cProjPC_cutoff_invalid', 'dWUA', 'DATA', 'distrust_batched'});
+% deciding to keep  so that we can reconstruct the spikes here
+rez = clearFields(rez, {'temp', 'cProj_cutoff_invalid', 'cProjPC_cutoff_invalid', 'cProj', 'cProjPC', 'dWUA', 'DATA', 'distrust_batched'});
 if isfield(rez, 'ops')
     rez.ops = clearFields(rez.ops, {'gui', 'distrust_data_mask'});
 end
@@ -20,6 +36,7 @@ for iF = 1:numel(flds)
 end
 
 % save final results as rez
+fname = fullfile(savePath, 'rez.mat');
 save(fname, 'rez', '-v7.3');
 
 end

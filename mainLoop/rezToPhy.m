@@ -1,8 +1,17 @@
-function rezToPhy(rez, savePath)
+function rezToPhy(rez, savePath, varargin)
 % pull out results from kilosort's rez to either return to workspace or to
 % save in the appropriate format for the phy GUI to run on. If you provide
 % a savePath it should be a folder, and you will need to have npy-matlab
 % available (https://github.com/kwikteam/npy-matlab)
+
+if nargin < 2 || isempty(savePath)
+    savePath = rez.ops.saveDir;
+end
+
+p = inputParser();
+p.addParameter('export_cutoff', false, @islogical); % export the cutoff spikes with cluster numbers 10000 + original, only for debugging, neuropixel-utils directly handles the cutoff spikes directly
+p.parse(varargin{:});
+export_cutoff = p.Results.export_cutoff;
 
 cluster_col = 7; % use post split cluster assignments
 markSplitsOnly = getOr(rez.ops, 'markSplitsOnly', false);
@@ -11,6 +20,13 @@ markSplitsOnly = getOr(rez.ops, 'markSplitsOnly', false);
 rez.W = gather(single(rez.Wphy));
 rez.U = gather(single(rez.U));
 rez.mu = gather(single(rez.mu));
+
+if export_cutoff
+    rez.st3_cutoff_invalid(:, cluster_col) = rez.st3_cutoff_invalid(:, cluster_col) + 1000;
+    rez.st3 = cat(1, rez.st3, rez.st3_cutoff_invalid);
+    rez.cProj = cat(1, rez.cProj, rez.cProj_cutoff_invalid);
+    rez.cProjPC = cat(1, rez.cProjPC, rez.cProjPC_cutoff_invalid);
+end
 
 [~, isort]   = sort(rez.st3(:,1), 'ascend');
 rez.st3      = rez.st3(isort, :);
@@ -87,7 +103,7 @@ spikeAmps = tempAmpsUnscaled(spikeTemplates).*amplitudes;
 % tempScalingAmps are equal mean for all templates)
 ta = clusterAverage(spikeTemplates, spikeAmps);
 tids = unique(spikeTemplates);
-tempAmps(tids) = ta; % because ta only has entries for templates that had at least one spike
+tempAmps(tids) = ta; % because ta only has entries for templaters that had at least one spike
 gain = getOr(rez.ops, 'gain', 1);
 tempAmps = gain*tempAmps'; % for consistency, make first dimension template number
 

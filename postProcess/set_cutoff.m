@@ -16,6 +16,7 @@ spike_valid = true(size(rez.st3, 1), 1);
 
 % sort by firing rate first
 rez.good = zeros(Nk, 1);
+prog = ProgressBar(Nk, 'Setting cluster specific spike cutoffs');
 for j = 1:Nk
     ix = find(rez.st3(:,cluster_col)==j);        
     ss = rez.st3(ix,1)/ops.fs;
@@ -56,12 +57,11 @@ for j = 1:Nk
     rez.Ths(j) = Th;
     % just mark it valid, we'll take care of clearing it later
     spike_valid(ix(vexp<=Th)) = false;
-%     rez.st3(ix(vexp<=Th), 6) = 0;
+%     rez.st3(ix(vexp<=Th), 6) = 0; % not used anymore, we want to slice it off into st3_cutoff_invalid
     
-    if rem(j,100)==1
-%        fprintf('%d \n', j) 
-    end
+    prog.update(j);
 end
+prog.finish();
 
 % we sometimes get NaNs, why?
 rez.est_contam_rate(isnan(rez.est_contam_rate)) = 1;
@@ -72,8 +72,17 @@ fprintf('Invalidating %d / %d spikes (%.2f %%)\n', nnz(~spike_valid), numel(spik
 ix = ~spike_valid;
 
 if isfield(rez, 'st3_cutoff_invalid')
-    if size(rez.st3_cutoff_invalid, 2) < size(rez.st3, 2)
-        rez.st3_cutoff_invalid = cat(2, rez.st3_cutoff_invalid, zeros(size(rez.st3_cutoff_invalid, 1), size(rez.st3, 2) - size(rez.st3_cutoff_invalid, 2)));
+    nColsCurrent = size(rez.st3_cutoff_invalid, 2);
+    nColsNeeded = size(rez.st3, 2);
+    if nColsCurrent < nColsNeeded
+        rez.st3_cutoff_invalid = cat(2, rez.st3_cutoff_invalid, zeros(size(rez.st3_cutoff_invalid, 1), nColsNeeded - nColsCurrent));
+        % copy over template column to clusters so that we don't depend on the order that merging and splitting is performed
+        if nColsCurrent < 6 && nColsNeeded >= 6
+            rez.st3_cutoff_invalid(:, 6) = rez.st3_cutoff_invalid(:, 2);
+        end
+        if nColsCurrent < 7 && nColsNeeded >= 7
+            rez.st3_cutoff_invalid(:, 7) = rez.st3_cutoff_invalid(:, 6);
+        end
     end
     rez.st3_cutoff_invalid = cat(1, rez.st3_cutoff_invalid, rez.st3(ix, :));
     rez.cProj_cutoff_invalid = cat(1, rez.cProj_cutoff_invalid, rez.cProj(ix, :));
