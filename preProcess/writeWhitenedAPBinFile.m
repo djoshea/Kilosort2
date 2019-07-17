@@ -12,6 +12,7 @@ blank_ch_inds = setdiff((1:ops.NchanTOT)', [syncCh;  chanMap]);
 
 NchanTOT = ops.NchanTOT;
 NT = ops.NT;
+ntbuff = ops.ntbuff;
 
 % we need to read from the original binary file in order to get the raw data to store the modified trials into
 fidRaw         = fopen(ops.fbinary, 'r');
@@ -22,13 +23,13 @@ end
 fidDestination = fopen(fname, 'w');
 
 for ibatch = 1:ops.Nbatch
-    
     % LOAD RAW DATA FROM ORIGINAL FILE
-    % skip the ntbuff, we're not filtering anymore, just taking the raw data so we get the non-whitened channels
-    offset = max(0, ops.twind + 2*NchanTOT*(NT * (ibatch-1)));
+    % skip the ntbuff extra at the left edge that would be kept in preProcessDataSub
+    % we're not filtering anymore, just taking the raw data so we get the non-whitened channels
+    offset = max(0, ops.twind + 2*NchanTOT*((NT-ntbuff) * (ibatch-1))); 
     fseek(fidRaw, offset, 'bof');
     
-    dataRAW = fread(fidRaw, [NchanTOT NT], '*int16');
+    dataRAW = fread(fidRaw, [NchanTOT NT-ntbuff], '*int16');
     if isempty(dataRAW)
         break;
     end
@@ -43,8 +44,16 @@ for ibatch = 1:ops.Nbatch
         W_dat = rez.DATA(:, :, ibatch)'; % --> C x T
     end
     
+    % From the filtered data, drop the ntbuff extra samples from the left edge (except on first batch)
+    if ibatch == 1
+        toffset = 0;
+    else
+        toffset = ntbuff;
+    end
+    W_dat = W_dat(:, toffset + (1:(NT-ntbuff)));
+    
     % OVERWRITE chanmap'ed channels in dataRaw with whitened data
-    if nsampcurr<NT
+    if nsampcurr< (NT-ntbuff)
         W_dat = W_dat(:, 1:nsampcurr);
     end
     
@@ -62,6 +71,6 @@ if ~ops.useRAM
     fclose(fidWhitened);
 end
 fclose(fidRaw);
-fclose(fidDesintation);
+fclose(fidDestination);
 
 end

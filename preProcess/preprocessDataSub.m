@@ -90,6 +90,11 @@ else
     distrust_batched = true(NT, Nbatch);
 end
 
+% in each loop, we start at 2*ntbuff before the current batch start (ibatch-1)*NT-ntbuff
+% NTbuff = NT + 4*ntbuff samples are read (2*ntbuff before, and 2*ntbuff after)
+% then NT are kept, skipping the first ntbuff samples (except for the first batch). 
+% This means that the left edge of each batched data block has ntbuff overlapping samples at the left (except for the first batch)
+% This is factored in when detecting spike times in learnAndSolve8b (see calculation of toff)
 prog = ProgressBar(Nbatch, 'Preprocessing batches');
 for ibatch = 1:Nbatch
     offset = max(0, ops.twind + 2*NchanTOT*((NT - ops.ntbuff) * (ibatch-1) - 2*ops.ntbuff));

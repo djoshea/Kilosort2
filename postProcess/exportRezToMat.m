@@ -7,12 +7,12 @@ end
 % write cutoff spikes to separate files to keep rez.mat sufficiently small
 if isfield(rez, 'cProj_cutoff_invalid') && ~isempty(rez.cProj_cutoff_invalid)
     templateFeatures = rez.cProj_cutoff_invalid;
-    writeNPY(templateFeatures, fullfile(savePath, 'template_features_cutoff.npy'));
+    writeNPY(templateFeatures, fullfile(savePath, 'cutoff_template_features.npy'));
 end
 
 if isfield(rez, 'cProjPC_cutoff_invalid') && ~isempty(rez.cProjPC_cutoff_invalid)
     pcFeatures = rez.cProjPC_cutoff_invalid;
-    writeNPY(pcFeatures, fullfile(savePath, 'pc_features_cutoff.npy'));
+    writeNPY(pcFeatures, fullfile(savePath, 'cutoff_pc_features.npy'));
 end
 
 % drop features from rez, too large
