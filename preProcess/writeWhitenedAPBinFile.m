@@ -64,6 +64,6 @@ if ~ops.useRAM
     fclose(fidWhitened);
 end
 fclose(fidRaw);
-fclose(fidDesintation);
+fclose(fidDestintation);
 
 end
