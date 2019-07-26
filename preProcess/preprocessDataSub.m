@@ -77,10 +77,13 @@ else
     DATA = zeros(NT, rez.ops.Nchan, Nbatch, 'int16');
 end
 % load data into patches, filter, compute covariance
-if isfield(ops,'fslow')&&ops.fslow<ops.fs/2
-    [b1, a1] = butter(3, [ops.fshigh/ops.fs,ops.fslow/ops.fs]*2, 'bandpass');
-else
-    [b1, a1] = butter(3, ops.fshigh/ops.fs*2, 'high');
+do_hp_filter = getOr(ops, 'do_hp_filter', true);
+if do_hp_filter
+    if isfield(ops,'fslow')&&ops.fslow<ops.fs/2
+        [b1, a1] = butter(3, [ops.fshigh/ops.fs,ops.fslow/ops.fs]*2, 'bandpass');
+    else
+        [b1, a1] = butter(3, ops.fshigh/ops.fs*2, 'high');
+    end
 end
 
 distrust_data_mask = getOr(ops, 'distrust_data_mask', []);
@@ -136,10 +139,14 @@ for ibatch = 1:Nbatch
     % subtract the mean from each channel
     dataRAW = dataRAW - mean(dataRAW_trusted, 1);    
     
-    datr = filter(b1, a1, dataRAW);
-    datr = flipud(datr);
-    datr = filter(b1, a1, datr);
-    datr = flipud(datr);
+    if do_hp_filter
+        datr = filter(b1, a1, dataRAW);
+        datr = flipud(datr);
+        datr = filter(b1, a1, datr);
+        datr = flipud(datr);
+    else
+        datr = dataRAW;
+    end
     
     % CAR, common average referencing by median
     if getOr(ops, 'CAR', 1)
