@@ -14,10 +14,13 @@ yc = rez.yc;
 distrust_data_mask = getOr(ops, 'distrust_data_mask', []);
 
 % load data into patches, filter, compute covariance
-if isfield(ops,'fslow')&&ops.fslow<ops.fs/2
-    [b1, a1] = butter(3, [ops.fshigh/ops.fs,ops.fslow/ops.fs]*2, 'bandpass');
-else
-    [b1, a1] = butter(3, ops.fshigh/ops.fs*2, 'high');
+do_hp_filter = getOr(ops, 'do_hp_filter', true);
+if do_hp_filter
+    if isfield(ops,'fslow')&&ops.fslow<ops.fs/2
+        [b1, a1] = butter(3, [ops.fshigh/ops.fs,ops.fslow/ops.fs]*2, 'bandpass');
+    else
+        [b1, a1] = butter(3, ops.fshigh/ops.fs*2, 'high');
+    end
 end
 
 fprintf('Getting channel whitening matrix... \n');
@@ -70,11 +73,16 @@ while ibatch<=Nbatch
 %     datr(irange, :) = 0;
 %     datr = real(ifft(datr, [], 1));
 %     
-    datr = filter(b1, a1, dataRAW);
-    datr = flipud(datr);
-    datr = filter(b1, a1, datr);
-    datr = flipud(datr);
 
+    if do_hp_filter
+        datr = filter(b1, a1, dataRAW);
+        datr = flipud(datr);
+        datr = filter(b1, a1, datr);
+        datr = flipud(datr);
+    else
+        datr = dataRAW;
+    end
+    
     % CAR, common average referencing by median
     if getOr(ops, 'CAR', 1)
         datr = datr - median(datr, 2);
