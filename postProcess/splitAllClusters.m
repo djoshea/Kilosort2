@@ -10,12 +10,24 @@ NchanNear   = min(ops.Nchan, 32);
 Nnearest    = min(ops.Nchan, 32);
 sigmaMask   = ops.sigmaMask;
 
-% column 6 is our way of tracking splits, this may not be here already
-if size(rez.st3, 2) < 6
-    % if not created yet, set split templates (6) to templates(2)
-   rez.st3(:, 6) = rez.st3(:, 2); 
+orig_template_col = 2;
+if isfield(rez, 'st3_split_col')
+    % no need to initialize, already set
+    template_col = rez.st3_split_col;
+else
+    if isfield(rez, 'st3_merge_col')
+        % has been merged, used next column and initialize based on merges
+        init_from_col = rez.st3_merge_col;
+        template_col = rez.st3_merge_col + 1;
+    else
+        % has not been merged, used next column and initialize based on raw templates
+        init_from_col = orig_template_col;
+        template_col = size(rez.st3, 2) + 1;
+    end
+    % initialze from current template_col
+    rez.st3(:, template_col) = rez.st3(:, init_from_col);
 end
-template_col = 6;
+rez.st3_split_col = template_col;
 
 ik = 0;
 Nfilt = size(rez.W,2);
@@ -262,7 +274,9 @@ rez.splitauc = cat(1, splitauc, nan(Nfilt - numel(splitauc), 1));
 if isfield(rez, 'mergecount')
     rez.mergecount = cat(1, rez.mergecount, zeros(Nfilt - numel(rez.mergecount), 1));
 end
-
+if isfield(rez, 'mergedst')
+    rez.mergedst = cat(1, rez.mergedst, zeros(Nfilt - numel(rez.mergedst), 1));
+end
 
 % figure(1)
 % subplot(1,4,1)

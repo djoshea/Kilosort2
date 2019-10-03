@@ -4,9 +4,9 @@ ops = rez.ops;
 dt = 1/1000;
 
 if size(rez.st3, 2) == 7
-    cluster_col = 7; % use post split cluster assignments
+    cluster_col = 7; % use post merge cluster assignments
 elseif size(rez.st3, 2) == 6
-    cluster_col = 6;
+    cluster_col = 6; % use post split cluster assignments
 else
     cluster_col = 2;
 end

@@ -7,12 +7,27 @@ Xsim = rez.simScore;
 Nk = size(Xsim,1);
 Xsim = Xsim - diag(diag(Xsim));
 
-% copy post-split template assignment from rez.st3(:, 6) to rez.st3(:, 6)
-if size(rez.st3, 2) < 7
-    % if not done already, set clusters (7) to split templates (6)
-   rez.st3(:, 7) = rez.st3(:, 6); 
+orig_template_col = 2;
+if isfield(rez, 'st3_merge_col')
+    cluster_col = rez.st3_merge_col;
+    if isfield(rez, 'st3_split_col')
+        template_col = rez.st3_split_col;
+    else
+        template_col = orig_template_col;
+    end
+    % no need to initialize, already set
+else
+    if isfield(rez, 'st3_split_col')
+        template_col = rez.st3_split_col;
+        cluster_col = rez.st3_split_col + 1;
+    else
+        template_col = orig_template_col;
+        cluster_col = size(rez.st3, 2) + 1;
+    end
+    % initialze from current template_col
+    rez.st3(:, cluster_col) = rez.st3(:, template_col);
 end
-cluster_col = 7;
+rez.st3_merge_col = cluster_col;
 
 if ~isfield(rez, 'mergecount')
     rez.mergecount = ones(Nk, 1);
