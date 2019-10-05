@@ -36,7 +36,7 @@ if nargin > 2 && ~isempty(distrust_samples)
     se(start_ones:stop_ones) = 1;
     distrust_samples = imdilate(distrust_samples, se);
     
-    peaks(~distrust_samples, :) = 0;
+    peaks(distrust_samples, :) = 0;
 end
 
 % exclude edge channels 
