@@ -10,24 +10,25 @@ NchanNear   = min(ops.Nchan, 32);
 Nnearest    = min(ops.Nchan, 32);
 sigmaMask   = ops.sigmaMask;
 
-orig_template_col = 2;
 if isfield(rez, 'st3_split_col')
     % no need to initialize, already set
     template_col = rez.st3_split_col;
 else
+    % splitAllClusters has not been called yet, use new column
+    template_col = size(rez.st3, 2) + 1;
+    
     if isfield(rez, 'st3_merge_col')
-        % has been merged, used next column and initialize based on merges
+        % has aready been merged, initialize based on merges
         init_from_col = rez.st3_merge_col;
-        template_col = rez.st3_merge_col + 1;
     else
-        % has not been merged, used next column and initialize based on raw templates
-        init_from_col = orig_template_col;
-        template_col = size(rez.st3, 2) + 1;
+        % has not been merged, initialize based on raw templates
+        init_from_col = rez.st3_template_col;
     end
     % initialze from current template_col
     rez.st3(:, template_col) = rez.st3(:, init_from_col);
 end
 rez.st3_split_col = template_col;
+rez.st3_template_col = template_col;
 
 ik = 0;
 Nfilt = size(rez.W,2);

@@ -7,27 +7,18 @@ Xsim = rez.simScore;
 Nk = size(Xsim,1);
 Xsim = Xsim - diag(diag(Xsim));
 
-orig_template_col = 2;
+template_col = rez.st3_template_col;
 if isfield(rez, 'st3_merge_col')
-    cluster_col = rez.st3_merge_col;
-    if isfield(rez, 'st3_split_col')
-        template_col = rez.st3_split_col;
-    else
-        template_col = orig_template_col;
-    end
     % no need to initialize, already set
+    cluster_col = rez.st3_merge_col;
 else
-    if isfield(rez, 'st3_split_col')
-        template_col = rez.st3_split_col;
-        cluster_col = rez.st3_split_col + 1;
-    else
-        template_col = orig_template_col;
-        cluster_col = size(rez.st3, 2) + 1;
-    end
+    % merge hasn't been called yet
+    cluster_col = size(rez.st3, 2) + 1;
     % initialze from current template_col
     rez.st3(:, cluster_col) = rez.st3(:, template_col);
 end
 rez.st3_merge_col = cluster_col;
+rez.st3_cluster_col = cluster_col;
 
 if ~isfield(rez, 'mergecount')
     rez.mergecount = ones(Nk, 1);

@@ -25,8 +25,6 @@ NchanNear   = min(ops.Nchan, 32);
 Nnearest    = min(ops.Nchan, 32);
 
 sigmaMask  = ops.sigmaMask;
-
-
 % ops.spkTh = -6; % why am I overwriting this here?
 
 nt0 = ops.nt0;
@@ -171,10 +169,12 @@ for ibatch = 1:niter
     end
     
     if flag_resort
-        % initial pass, resort the templates by amplitude
+        % initial pass, resort the templates by channel lowest to highest
+        % iW is Nfilt x 1(templates) vector of channel indices where the biggest deflection is (at time nt0min)
         [~, iW] = max(abs(dWU(nt0min, :, :)), [], 2);
         iW = int32(squeeze(iW));
 
+        % then we sort the templates by iW, we don't need to resort U as it will be recomputed immediately afterwards
         [iW, isort] = sort(iW);
         W = W(:,isort, :);
         dWU = dWU(:,:,isort);
@@ -415,6 +415,9 @@ for j = 1:Nfilt
     rez.U_a(:,:,j) = gather(A(:, 1:nKeep) * B(1:nKeep, 1:nKeep));
     rez.U_b(:,:,j) = gather(C(:, 1:nKeep));
 end
+
+rez.st3_template_col = 2;
+rez.st3_cluster_col = 2;
 
 fprintf('Finished compressing time-varying templates \n')
 %%
