@@ -24,7 +24,7 @@ if getOr(ops, 'minfr_goodchannels', .1)>0
     % determine bad channels
     fprintf('Time %3.0fs. Determining good channels.. \n', toc);
 
-    igood = get_good_channels(ops, chanMap, rez.DATA); % trusted samples only
+    igood = get_good_channels(ops, chanMap); % trusted samples only
     xc = xc(igood);
     yc = yc(igood);
     kcoords = kcoords(igood);

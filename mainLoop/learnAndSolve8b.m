@@ -100,7 +100,9 @@ p1 = .95; % decay of nsp estimate
 
 fprintf('Time %3.0fs. Optimizing templates ...\n', toc)
 
-fid = fopen(ops.fproc, 'r');
+if ~ops.useRAM
+    fid = fopen(ops.fproc, 'r');
+end
 
 ntot = 0;
 ndrop = zeros(1,2);
