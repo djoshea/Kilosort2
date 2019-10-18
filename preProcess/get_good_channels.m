@@ -1,4 +1,10 @@
 function igood = get_good_channels(ops, chanMap)
+% of the channels indicated by the user as good (chanMap)
+% further subset those that have a mean firing rate above a certain value
+% (default is ops.minfr_goodchannels = 0.1Hz)
+% needs the same filtering parameters in ops as usual
+% also needs to know where to start processing batches (twind)
+% and how many channels there are in total (NchanTOT)
 
 Nbatch = ops.Nbatch;
 twind = ops.twind;
@@ -22,85 +28,62 @@ ibatch = 1;
 ich = gpuArray.zeros(5e4,1, 'int16');
 k = 0;
 ttime = 0;
+
+% from a subset of batches, count threshold crossings
 while ibatch<=Nbatch
     offset = twind + 2*NchanTOT*NT* (ibatch-1);
     fseek(fid, offset, 'bof');
     buff = fread(fid, [NchanTOT NT], '*int16');
-        
+
     if isempty(buff)
         break;
     end
 
-    if ops.GPU
-        dataRAW = gpuArray(buff);
-    else
-        dataRAW = buff;
-    end
-    dataRAW = dataRAW'; % NT x nChan
-    dataRAW = single(dataRAW);
-    dataRAW = dataRAW(:, chanMap);
-    
     % only select trusted timepoints
     if ~isempty(distrust_data_mask)
         inds_this_batch = ops.tstart + NT*(ibatch-1) + (1 : size(dataRaw, 1));
         inds_this_batch = inds_this_batch(inds_this_batch <= numel(distrust_data_mask));
         distrust_this_batch = distrust_data_mask(:, inds_this_batch);
-        dataRaw = dataRaw(~distrust_this_batch, :);
+        buff = buff(~distrust_this_batch, :);
     end
-    NTthis = size(dataRaw, 1);
-    
-    % subtract the mean from each channel
-    dataRAW = dataRAW - mean(dataRAW, 1);
-    
-    datr = filter(b1, a1, dataRAW);
-    datr = flipud(datr);
-    datr = filter(b1, a1, datr);
-    datr = flipud(datr);
+    buff = size(buff, 1);
 
-    % CAR, common average referencing by median
-    if getOr(ops, 'CAR', 1)
-        datr = datr - median(datr, 2);
-    end
-    
-   
-    % determine any threshold crossings
-    datr = datr./std(datr,1,1);
-    
+    datr    = gpufilter(buff, ops, chanMap); % apply filters and median subtraction
+
+    % very basic threshold crossings calculation
+    datr = datr./std(datr,1,1); % standardize each channel ( but don't whiten)
+
     if getOr(ops, 'spikeThreshBothDirs', false)
         % threshold from above and from below
-        mdatNeg = my_min(datr, 30, 1);
-        mdatPos = my_min(-datr, 30, 1);
+        mdatNeg = my_min(datr, 30, 1); % get local minima as min value in +/- 30-sample range
+        mdatPos = my_min(-datr, 30, 1); % get local maxima as min value in +/- 30-sample range
         ind = find((datr < mdatNeg+1e-3 & datr<ops.spkTh) | ...
-                   (-datr < mdatPos+1e-3 & datr>-ops.spkTh));
+                   (-datr < mdatPos+1e-3 & datr>-ops.spkTh));  % take local extema that cross the +/- threshold
     else
-        mdat = my_min(datr, 30, 1);
-        ind = find(datr<mdat+1e-3 & datr<ops.spkTh);
+        mdat = my_min(datr, 30, 1);  % get local minima as min value in +/- 30-sample range
+        ind = find(datr<mdat+1e-3 & datr<ops.spkTh); % take local minima that cross the negative threshold
     end
     [xi, xj] = ind2sub(size(datr), ind);
     xj(xi<ops.nt0 | xi>NTthis-ops.nt0) = [];
     if k+numel(xj)>numel(ich)
-        ich(2*numel(ich)) = 0;        
-    end        
-    ich(k + [1:numel(xj)]) = xj;
-    
+        ich(2*numel(ich)) = 0; % if necessary, extend the variable which holds the spikes
+    end
+    ich(k + [1:numel(xj)]) = xj; % collect the channel identities for the detected spikes
+
     k = k + numel(xj);
-    
-    ibatch = ibatch + ceil(Nbatch/100);
-    ttime = ttime + size(datr,1)/ops.fs;    
+
+    ibatch = ibatch + ceil(Nbatch/100); % skip every 100 batches
+    ttime = ttime + size(datr,1)/ops.fs; % keep track of total time where we took spikes from
 end
 fclose(fid);
 
 ich = ich(1:k);
 
-nc = histcounts(ich, .5 + [0:Nchan]);
-nc = nc/ttime;
+nc = histcounts(ich, .5 + [0:Nchan]); % count how many spikes each channel got
+nc = nc/ttime; % divide by total time to get firing rate
 
 % igood = nc>.1;
-igood = nc>=getOr(ops, 'minfr_goodchannels', .1);
-% igood([1:200 210:end]) = 0;
+igood = nc>=getOr(ops, 'minfr_goodchannels', .1); % keep only those channels above the preset mean firing rate
 
-% chanMap = chanMap(nc>.1);
 fprintf('found %d threshold crossings in %2.2f seconds of data \n', k, ttime)
 fprintf('found %d bad channels \n', sum(~igood))
-
-

@@ -1,4 +1,6 @@
 function Wrot = get_whitening_matrix(rez)
+% based on a subset of the data, compute a channel whitening matrix
+% this requires temporal filtering first (gpufilter)
 
 ops = rez.ops;
 Nbatch = ops.Nbatch;
@@ -25,21 +27,15 @@ end
 
 fprintf('Getting channel whitening matrix... \n');
 fid = fopen(ops.fbinary, 'r');
-if ops.GPU
-    CC = gpuArray.zeros( Nchan,  Nchan, 'single');
-else
-    CC = zeros( Nchan,  Nchan, 'single');
-end
+CC = gpuArray.zeros( Nchan,  Nchan, 'single'); % we'll estimate the covariance from data batches, then add to this variable
 
-
-% irange = [NT/8:(NT-NT/8)];
 
 ibatch = 1;
-while ibatch<=Nbatch    
+while ibatch<=Nbatch
     offset = max(0, twind + 2*NchanTOT*((NT - ops.ntbuff) * (ibatch-1) - 2*ops.ntbuff));
     fseek(fid, offset, 'bof');
     buff = fread(fid, [NchanTOT NTbuff], '*int16');
-        
+
     if isempty(buff)
         break;
     end
@@ -47,66 +43,33 @@ while ibatch<=Nbatch
     if nsampcurr<NTbuff
         buff(:, nsampcurr+1:NTbuff) = repmat(buff(:,nsampcurr), 1, NTbuff-nsampcurr);
     end
-    if ops.GPU
-        dataRAW = gpuArray(buff);
-    else
-        dataRAW = buff;
-    end
-    dataRAW = dataRAW';
-    dataRAW = single(dataRAW);
-    dataRAW = dataRAW(:, chanMap);
-    
+
     % only select trusted timepoints
     if ~isempty(distrust_data_mask)
         inds_this_batch = max(0, ops.tstart + (NT-ops.ntbuff)*(ibatch-1)-ops.ntbuff) + (1 : size(dataRAW, 1));
         inds_this_batch = inds_this_batch(inds_this_batch <= numel(distrust_data_mask));
         distrust_this_batch = distrust_data_mask(inds_this_batch);
-        dataRAW = dataRAW(~distrust_this_batch, :);
+        buff = buff(~distrust_this_batch, :);
     end
-    NTthis = size(dataRAW, 1);
-    
-    % subtract the mean from each channel
-    dataRAW = dataRAW - mean(dataRAW, 1);
-    
-%     datr = fft(dataRAW, [], 1);
-%     datr = datr./(1 + abs(datr));
-%     datr(irange, :) = 0;
-%     datr = real(ifft(datr, [], 1));
-%     
+    NTthis = size(buff, 1);
 
-    if do_hp_filter
-        datr = filter(b1, a1, dataRAW);
-        datr = flipud(datr);
-        datr = filter(b1, a1, datr);
-        datr = flipud(datr);
-    else
-        datr = dataRAW;
-    end
-    
-    % CAR, common average referencing by median
-    if getOr(ops, 'CAR', 1)
-        datr = datr - median(datr, 2);
-    end
-    
-    CC        = CC + (datr' * datr)/NTthis;    
-    
-    ibatch = ibatch + ops.nSkipCov;
+    datr    = gpufilter(buff, ops, rez.ops.chanMap); % apply filters and median subtraction
+
+    CC        = CC + (datr' * datr)/NTthis; % sample covariance
+
+    ibatch = ibatch + ops.nSkipCov; % skip this many batches
 end
-CC = CC / ceil((Nbatch-1)/ops.nSkipCov);
+CC = CC / ceil((Nbatch-1)/ops.nSkipCov); % normalize by number of batches
 
 fclose(fid);
-fprintf('Channel-whitening filters computed. \n');
 
 if ops.whiteningRange<Inf
+    % if there are too many channels, a finite whiteningRange is more robust to noise in the estimation of the covariance
     ops.whiteningRange = min(ops.whiteningRange, Nchan);
-    Wrot = whiteningLocal(gather_try(CC), yc, xc, ops.whiteningRange);
+    Wrot = whiteningLocal(gather(CC), yc, xc, ops.whiteningRange); % this function performs the same matrix inversions as below, just on subsets of channels around each channel
 else
-    [E, D] 	= svd(CC);
-    D       = diag(D);
-%     eps 	= mean(D); %1e-6;
-    eps 	= 1e-6;
-    f  = mean((D+eps) ./ (D+1e-6));
-%     fprintf('%2.2f ', f)
-    Wrot 	= E * diag(f./(D + eps).^.5) * E';
+    Wrot = whiteningFromCovariance(CC);
 end
-Wrot    = ops.scaleproc * Wrot;
+Wrot    = ops.scaleproc * Wrot; % scale this from unit variance to int 16 range. The default value of 200 should be fine in most (all?) situations.
+
+fprintf('Channel-whitening matrix computed. \n');
