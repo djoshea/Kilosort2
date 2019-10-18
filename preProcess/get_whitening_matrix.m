@@ -46,12 +46,12 @@ while ibatch<=Nbatch
 
     % only select trusted timepoints
     if ~isempty(distrust_data_mask)
-        inds_this_batch = max(0, ops.tstart + (NT-ops.ntbuff)*(ibatch-1)-ops.ntbuff) + (1 : size(dataRAW, 1));
+        inds_this_batch = max(0, ops.tstart + (NT-ops.ntbuff)*(ibatch-1)-ops.ntbuff) + (1 : size(buff, 2));
         inds_this_batch = inds_this_batch(inds_this_batch <= numel(distrust_data_mask));
         distrust_this_batch = distrust_data_mask(inds_this_batch);
-        buff = buff(~distrust_this_batch, :);
+        buff = buff(:, ~distrust_this_batch);
     end
-    NTthis = size(buff, 1);
+    NTthis = size(buff, 2);
 
     datr    = gpufilter(buff, ops, rez.ops.chanMap); % apply filters and median subtraction
 

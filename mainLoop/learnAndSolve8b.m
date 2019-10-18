@@ -8,7 +8,6 @@ NrankPC = 6; % this one is the rank of the PCs, used to detect spikes with thres
 Nrank = 3; % this one is the rank of the templates
 rng('default'); rng(1);
 
-<<<<<<< HEAD
 % we need PC waveforms, as well as template waveforms
 [wTEMP, wPCA]    = extractTemplatesfromSnippets(rez, NrankPC, false); % distrusted, RAM
 
@@ -30,7 +29,6 @@ Nchan 	= ops.Nchan;
 NchanNear   = min(ops.Nchan, 32);
 Nnearest    = min(ops.Nchan, 32);
 
-<<<<<<< HEAD
 % decay of gaussian spatial mask centered on a channel
 sigmaMask  = ops.sigmaMask;
 % spike threshold for finding missed spikes in residuals
@@ -85,7 +83,6 @@ t0 = ceil(rez.ops.trange(1) * ops.fs);
 
 nInnerIter  = 60; % this is for SVD for the power iteration
 
-<<<<<<< HEAD
 % schedule of learning rates for the model fitting part
 % starts small and goes high, it corresponds approximately to the number of spikes
 % from the past that were averaged to give rise to the current template
@@ -140,7 +137,6 @@ for ibatch = 1:niter
     if ibatch == iter_revert_middle
         % this is required to revert back to the template states in the middle of the batches
         % halfway through in the final pass, we've reached the end of the
-=======
 
         [W, dWU] = revertW(rez);
         prog.pause_for_output();

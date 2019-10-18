@@ -46,7 +46,7 @@ while ibatch<=Nbatch
         distrust_this_batch = distrust_data_mask(:, inds_this_batch);
         buff = buff(~distrust_this_batch, :);
     end
-    buff = size(buff, 1);
+    NTthis = size(buff, 1);
 
     datr    = gpufilter(buff, ops, chanMap); % apply filters and median subtraction
 

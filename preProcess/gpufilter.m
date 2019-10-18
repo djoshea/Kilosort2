@@ -1,4 +1,4 @@
-function datr = gpufilter(buff, ops, chanMap, mask_trust_for_mean_over_time)
+function datr = gpufilter(buff, ops, chanMap, mask_distrust_for_mean_over_time)
 % filter this batch of data after common average referencing with the
 % median
 % buff is timepoints by channels
@@ -18,13 +18,13 @@ if do_hp_filter
 end
 
 dataRAW = gpuArray(buff); % move int16 data to GPU
-dataRAW = dataRAW';
+dataRAW = dataRAW'; % ch x time --> time x ch
 dataRAW = single(dataRAW); % convert to float32 so GPU operations are fast
 dataRAW = dataRAW(:, chanMap); % subsample only good channels
 
 % subtract the mean from each channel
-if nargin > 3 && ~isempty(mask_trust_for_mean_over_time)
-    dataRAW = dataRAW - mean(dataRAW(mask_trust_for_mean_over_time, :), 1); % only use "trusted" timepoints for the mean
+if nargin > 3 && ~isempty(mask_distrust_for_mean_over_time)
+    dataRAW = dataRAW - mean(dataRAW(~mask_distrust_for_mean_over_time, :), 1); % only use "trusted" timepoints for the mean
 else
     dataRAW = dataRAW - mean(dataRAW, 1);
 end
@@ -40,4 +40,6 @@ if do_hp_filter
     datr = flipud(datr); % reverse time
     datr = filter(b1, a1, datr); % causal forward filter again
     datr = flipud(datr); % reverse time back
+else
+    datr = dataRAW;
 end

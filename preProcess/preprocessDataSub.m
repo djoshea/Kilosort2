@@ -87,7 +87,7 @@ distrust_data_mask = getOr(ops, 'distrust_data_mask', []);
 if isempty(distrust_data_mask)
     distrust_batched = [];
 else
-    distrust_batched = true(NT, Nbatch);
+    distrust_batched = true(NT, Nbatch); % this starts out as true such that the filter-padding edges aren't trusted either
 end
 
 % in each loop, we start at 2*ntbuff before the current batch start (ibatch-1)*NT-ntbuff
@@ -118,7 +118,7 @@ for ibatch = 1:Nbatch
 
     % only select trusted timepoints for mean computation
     if ~isempty(distrust_data_mask)
-        inds_this_batch = max(0, ops.tstart + (NT-ops.ntbuff)*(ibatch-1)-ops.ntbuff) + (1 : size(dataRAW, 1));
+        inds_this_batch = max(0, ops.tstart + (NT-ops.ntbuff)*(ibatch-1)-ops.ntbuff) + (1 : size(buff, 2));
         inds_this_batch = inds_this_batch(inds_this_batch <= numel(distrust_data_mask));
         distrust_this_batch = distrust_data_mask(inds_this_batch);
     else
