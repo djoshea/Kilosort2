@@ -15,16 +15,6 @@ yc = rez.yc;
 
 distrust_data_mask = getOr(ops, 'distrust_data_mask', []);
 
-% load data into patches, filter, compute covariance
-do_hp_filter = getOr(ops, 'do_hp_filter', true);
-if do_hp_filter
-    if isfield(ops,'fslow')&&ops.fslow<ops.fs/2
-        [b1, a1] = butter(3, [ops.fshigh/ops.fs,ops.fslow/ops.fs]*2, 'bandpass');
-    else
-        [b1, a1] = butter(3, ops.fshigh/ops.fs*2, 'high');
-    end
-end
-
 fprintf('Getting channel whitening matrix... \n');
 fid = fopen(ops.fbinary, 'r');
 CC = gpuArray.zeros( Nchan,  Nchan, 'single'); % we'll estimate the covariance from data batches, then add to this variable

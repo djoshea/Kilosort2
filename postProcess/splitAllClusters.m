@@ -46,11 +46,10 @@ Nfilt = size(rez.W,2);
 nsplits= 0;
 
 % determine what channels each template lives on
-[iC, mask, C2C] = getClosestChannels(rez, sigmaMask, NchanNear); % iC is 32 x nCh listing the 32 closest channels to each other channel
+[iC, mask, C2C] = getClosestChannels(rez, sigmaMask, NchanNear); %#ok<ASGLU> % iC is 32 x nCh listing the 32 closest channels to each other channel
 
 ops.nt0min = getOr(ops, 'nt0min', 20); % the waveforms must be aligned to this sample
 
-<<<<<<< HEAD
  % find the peak abs channel for each template
 [~, iW] = max(abs(rez.dWU(ops.nt0min, :, :)), [], 2); % iW indicates for each template, on which channel dWU (the average of the spikes) is largest
 iW = squeeze(int32(iW));
@@ -84,6 +83,11 @@ if isfield(rez, 'split_orig_template')
 else
     split_orig_template = (1:Nfilt)';
 end
+if isfield(rez, 'splitProjections')
+    splitProj = rez.splitProjections;
+else
+    splitProj = cell(Nfilt, 1);
+end
 
 prog = ProgressBar(Nfilt, 'Searching for clusters to split');
 while ik<Nfilt
@@ -104,7 +108,8 @@ while ik<Nfilt
     ss = rez.st3(isp,1)/ops.fs; % convert to seconds
 
     clp0 = rez.cProjPC(isp, :, :); % get the PC projections for these spikes
-    clp0 = gpuArray(clp0(:,:));
+    %clp0 = gpuArray(clp0(:,:));
+    clp0 = clp0(:,:);
     clp = clp0 - mean(clp0,1); % mean center them
 
     clp = clp - my_conv2(clp, 250, 1); % subtract a running average, because the projections are NOT drift corrected
@@ -112,7 +117,7 @@ while ik<Nfilt
     % now use two different ways to initialize the bimodal direction
     % the main script calls this function twice, and does both initializations
     if flag
-        [u s v] = svdecon(clp');
+        [u, s, v] = svdecon(clp'); %#ok<ASGLU>
         w = u(:,1); % initialize with the top PC
     else
         w = mean(clp0, 1)'; % initialize with the mean of NOT drift-corrected trace
@@ -131,6 +136,7 @@ while ik<Nfilt
     logp = zeros(numel(isp), 2); % initialize matrix of log probabilities that each spike is assigned to the first or second cluster
 
     % do 50 pursuit iteration
+    logP = nan(50, 1);
     for k = 1:50
         % for each spike, estimate its probability to come from either Gaussian cluster
         logp(:,1) = -1/2*log(s1) - (x-mu1).^2/(2*s1) + log(p);
@@ -173,7 +179,7 @@ while ik<Nfilt
 
 
     % did this split fix the autocorrelograms?
-    [K, Qi, Q00, Q01, rir] = ccg(ss(ilow), ss(~ilow), 500, dt); % compute the cross-correlogram between spikes in the putative new clusters
+    [K, Qi, Q00, Q01, rir] = ccg(ss(ilow), ss(~ilow), 500, dt); %#ok<ASGLU> % compute the cross-correlogram between spikes in the putative new clusters
     Q12 = min(Qi/max(Q00, Q01)); % refractoriness metric 1
     R = min(rir); % refractoriness metric 2
 
@@ -209,6 +215,9 @@ while ik<Nfilt
         if markSplitsOnly
             continue;
         end
+        
+        % store the splitting axes too
+        splitProj{ik} = struct('w', w, 'mu1', mu1, 'mu2', mu2, 's1', s1, 's2', s2, 'p', p);
 
         % actually do the split on the template, one template stays, one goes
         Nfilt = Nfilt + 1;
@@ -276,6 +285,12 @@ Params     = double([0 Nfilt 0 0 size(rez.W,1) Nnearest ...
     Nrank 0 0 Nchan NchanNear ops.nt0min 0]); % make a new Params to pass on parameters to CUDA
 
 % we need to re-estimate the spatial profiles
+if ~isfield(rez, 'W_preSplit')
+    rez.W_preSplit = rez.W;
+    rez.U_preSplit = rez.U;
+    rez.mu_preSplit = rez.mu;
+end
+
 [Ka, Kb] = getKernels(ops, 10, 1); % we get the time upsampling kernels again
 
 if reproducible
@@ -308,6 +323,7 @@ rez.split_orig_template = split_orig_template;
 rez.splitsrc = splitsrc;
 rez.splitdst = cat(1, splitdst, nan(Nfilt - numel(splitdst), 1));
 rez.splitauc = cat(1, splitauc, nan(Nfilt - numel(splitauc), 1));
+rez.splitProjections = cat(1, splitProj, cell(Nfilt - numel(splitProj), 1));
 if isfield(rez, 'mergecount')
     rez.mergecount = cat(1, rez.mergecount, zeros(Nfilt - numel(rez.mergecount), 1));
 end

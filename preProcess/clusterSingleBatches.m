@@ -128,7 +128,7 @@ prog = ProgressBar(nBatches, 'Determining batch sort order');
 for ibatch = 1:nBatches
     % for every batch, compute in parallel its dissimilarity to ALL other batches
     Wh0 = single(Whs(:, ibatch));
-    W0  = Ws(:, :, ibatch);
+    W0  = Ws(:, :, ibatch); %#ok<NASGU>
     mu = mus(:, ibatch);
 
     % embed the templates from the primary batch back into a full, sparse representation
@@ -140,9 +140,8 @@ for ibatch = 1:nBatches
     % pairs of templates that live on the same channels are potential "matches"
     iMatch = sq(min(abs(single(iC) - reshape(Wh0, 1, 1, [])), [], 1))<.1;
 
-
     % compute dissimilarities for iMatch = 1
-    [iclust, ds] = mexDistances2(Params, Ws, W, iMatch, iC-1, Whs-1, mus, mu);
+    [iclust, ds] = mexDistances2(Params, Ws, W, iMatch, iC-1, Whs-1, mus, mu); %#ok<ASGLU>
 
     % ds are squared Euclidian distances
     ds = reshape(ds, Nfilt, []); % this should just be an Nfilt-long vector

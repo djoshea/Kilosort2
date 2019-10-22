@@ -1,6 +1,8 @@
 function rez = learnAndSolve8b(rez)
 % This is the main optimization. Takes the longest time and uses the GPU heavily.
 
+% isequaltol = @(a, b) isequal(size(a), size(b)) && max(abs(a - b), [], 'all') < 1e-5;
+
 ops = rez.ops;
 ops.fig = getOr(ops, 'fig', 1); % whether to show plots every N batches
 
@@ -80,7 +82,7 @@ niter   = numel(irounds);
 % end
 
 % these two flags are used to keep track of what stage of model fitting we're at
-flag_final    =  0;
+% flag_final    =  0;
 flag_resort   = 1;
 
 % this is the absolute temporal offset in seconds corresponding to the start of the
@@ -249,7 +251,7 @@ for ibatch = 1:niter
         % @djoshea: output of mexMPnu8 is reproducible if st0, id0, x0, featW, featPC, and vexp are
         % sorted by [~, sortIdx] = sort(st0) along the appropriate nspikes dimension. The sort order doesn't affect
         % subsequent processing though so it isn't strictly necessary, so we save time by doing the sorting once at end
-        
+
         % round to # decimal places
         dWU0 = round(dWU0 * 2^roundpow2) / 2^roundpow2;
     else
@@ -266,7 +268,6 @@ for ibatch = 1:niter
     if nsprow<nspcol
         nsp = nsp';
     end
-
 
     % updates the templates as a running average weighted by recency
     % since some clusters have different number of spikes, we need to apply the
@@ -289,7 +290,6 @@ for ibatch = 1:niter
         prog.update(ibatch, 'Performing final extraction pass over batches');
         % halfway done, so we switch to final extraction mode and memorizeW
         flag_resort   = 0;
-        flag_final = 1;
 
         % final clean up, triage templates one last time
         [W, U, dWU, mu, nsp, ndrop] = ...
@@ -317,7 +317,7 @@ for ibatch = 1:niter
         fprintf('Memorized middle batch templates\n')
     end
 
-    if ibatch< iter_finalize %-50
+    if ibatch < iter_finalize %-50
         % initial pass through the batches, during the main "learning" phase of fitting a model
         if rem(ibatch, 5)==1
             % this drops templates based on spike rates and/or similarities to other templates
@@ -370,13 +370,14 @@ for ibatch = 1:niter
 
     end
 
-    if ibatch>iter_finalize
+    if ibatch > iter_finalize
         % in the final extraction pass, not the first iteration though
         % during the final extraction pass, this keeps track of all spikes and features
 
         % we memorize the spatio-temporal decomposition of the waveforms at this batch
         % this is currently only used in the GUI to provide an accurate reconstruction
         % of the raw data at this time
+        rez.dWU0A(:,:,:,k) = gather(dWU0);
         rez.dWUA(:,:,:,k) = gather(dWU);
         rez.WA(:,:,:,k) = gather(W);
         rez.UA(:,:,:,k) = gather(U);
@@ -539,8 +540,14 @@ for j = 1:Nfilt
     rez.U_b(:,:,j) = gather(C(:, 1:nKeep));
 end
 
+rez.iW = iW; % @djoshea not sure if needed for reextract yet
+
 rez.st3_template_col = 2;
 rez.st3_cluster_col = 2;
+
+rez.dWU = gather(rez.dWU);
+rez.nsp = gather(rez.nsp);
+rez.iW = gather(rez.iW);
 
 fprintf('Finished compressing time-varying templates \n')
 %%

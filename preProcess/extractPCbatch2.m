@@ -16,13 +16,10 @@ NT  	      = ops.NT;
 % number of nearest channels to consider
 NchanNear = size(iC,1);
 
-batchstart = 0:NT:NT*Nbatch; % batches start at these timepoints
-offset = 2 * ops.Nchan*batchstart(ibatch); % binary file offset in bytes
-
 if ~ops.useRAM
     fid = fopen(ops.fproc, 'r');
-
-    offset = 2 * ops.Nchan*batchstart(ibatch);
+    batchstart = 0:NT:NT*Nbatch; % batches start at these timepoints
+    offset = 2 * ops.Nchan*batchstart(ibatch); % binary file offset in bytes
     fseek(fid, offset, 'bof');
     dat = fread(fid, [NT ops.Nchan], '*int16');
     fclose(fid);
