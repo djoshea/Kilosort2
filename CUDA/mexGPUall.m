@@ -12,7 +12,13 @@
     mexcuda -largeArrayDims mexClustering2.cu
     mexcuda -largeArrayDims mexDistances2.cu
 
-
+    % @djoshea reproducible versions of some of the above, used when ops.reproducible is true
+    mexcuda -largeArrayDims mexThSpkPCr.cu
+    mexcuda -largeArrayDims mexGetSpikes2r.cu
+    mexcuda -largeArrayDims mexMPnu8r.cu
+    mexcuda -largeArrayDims mexSVDsmall2r.cu
+    mexcuda -largeArrayDims mexClustering2r.cu
+    
 %    mex -largeArrayDims mexMPmuFEAT.cu
 %    mex -largeArrayDims mexMPregMU.cu
 %    mex -largeArrayDims mexWtW2.cu
