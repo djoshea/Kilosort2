@@ -1,4 +1,4 @@
-function [uS, idchan] = extractPCbatch2(rez, wPCA, ibatch, iC)
+function [uS, idchan, st] = extractPCbatch2(rez, wPCA, ibatch, iC)
 % this function finds threshold crossings in the data using
 % projections onto the pre-determined principal components
 % wPCA is number of time samples by number of PCs
@@ -9,6 +9,7 @@ function [uS, idchan] = extractPCbatch2(rez, wPCA, ibatch, iC)
 % starts with predefined PCA waveforms
 wPCA = gpuArray(single(wPCA(:, 1:3)));
 ops = rez.ops;
+reproducible = getOr(ops, 'reproducible', false);
 Nbatch      = rez.temp.Nbatch;
 NT  	      = ops.NT;
 
@@ -49,6 +50,15 @@ Params = [NT Nchan NchanNear nt0 nt0min spkTh NrankPC];
 
 % call a CUDA function to do the hard work
 % returns a matrix of features uS, as well as the center channels for each spike
-[uS, idchan] = mexThSpkPC(Params, dataRAW, wPCA, iC-1);
-
-idchan = idchan + 1; % go from 0-indexing to 1-indexing
+if reproducible
+    % output is not in reproducible order, sorting by time then channel fixes this
+    [uS, idchan, st] = mexThSpkPCr(Params, dataRAW, wPCA, iC-1);
+    [out, sortIdx] = sortrows([st, idchan]);
+    st = out(:, 1);
+    idchan = out(:, 2) + 1; % go from 0-indexing to 1-indexing
+    uS = uS(:, sortIdx);
+else
+    [uS, idchan] = mexThSpkPC(Params, dataRAW, wPCA, iC-1);
+    idchan = idchan + 1;
+    st = [];
+end

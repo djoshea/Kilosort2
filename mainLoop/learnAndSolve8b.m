@@ -4,9 +4,15 @@ function rez = learnAndSolve8b(rez)
 ops = rez.ops;
 ops.fig = getOr(ops, 'fig', 1); % whether to show plots every N batches
 
+reproducible = getOr(ops, 'reproducible', false);
+roundpow2 = 17;
+
 NrankPC = 6; % this one is the rank of the PCs, used to detect spikes with threshold crossings
 Nrank = 3; % this one is the rank of the templates
 rng('default'); rng(1);
+if reproducible
+    gpurng('default'); gpurng(1);
+end
 
 % we need PC waveforms, as well as template waveforms
 [wTEMP, wPCA]    = extractTemplatesfromSnippets(rez, NrankPC, false); % distrusted, RAM
@@ -94,7 +100,7 @@ Params     = double([NT Nfilt ops.Th(1) nInnerIter nt0 Nnearest ...
     Nrank ops.lam pmi(1) Nchan NchanNear ops.nt0min 1 Nsum NrankPC ops.Th(1)]);
 
 % W0 has to be ordered like this
-W0 = permute(double(wPCA), [1 3 2]);
+W0 = permute(wPCAd, [1 3 2]);
 
 % initialize the list of channels each template lives on
 iList = int32(gpuArray(zeros(Nnearest, Nfilt)));
@@ -176,10 +182,21 @@ for ibatch = 1:niter
     if ibatch==1
         % only on the first batch, we first get a new set of spikes from the residuals,
         % which in this case is the unmodified data because we start with no templates
-        [dWU, cmap] = mexGetSpikes2(Params, dataRAW, wTEMP, iC-1);    % CUDA function to get spatiotemporal clips from spike detections     %#ok<ASGLU>
-%         dWU = mexGetSpikes(Params, dataRAW, wPCA);
-        dWU = double(dWU);
-        dWU = reshape(wPCAd * (wPCAd' * dWU(:,:)), size(dWU)); % project these into the wPCA waveforms
+        % dWU is nt0 x nChan x
+        if reproducible
+            [dWU, cmap, st, id] = mexGetSpikes2r(Params, dataRAW, wTEMP, iC-1);    %#ok<ASGLU> % CUDA function to get spatiotemporal clips from spike detections
+            % @djoshea for reproducibility, sort dWU by st, id
+            [~, sortIdx] = sortrows([st, id]);
+            dWU = double(dWU(:, :, sortIdx));
+
+            dWU = reshape(wPCAd * (wPCAd' * dWU(:,:)), size(dWU)); % project these into the wPCA waveforms
+            dWU = round(dWU * 2^roundpow2) / 2^roundpow2;
+        else
+            [dWU, cmap] = mexGetSpikes2(Params, dataRAW, wTEMP, iC-1);    %#ok<ASGLU> % CUDA function to get spatiotemporal clips from spike detections
+
+            dWU = double(dWU);
+            dWU = reshape(wPCAd * (wPCAd' * dWU(:,:)), size(dWU)); % project these into the wPCA waveforms
+        end
 
         W = W0(:,ones(1,size(dWU,3)),:); % initialize the low-rank decomposition with standard waves
         Nfilt = size(W,2); % update the number of filters/templates
@@ -204,7 +221,16 @@ for ibatch = 1:niter
 
     % decompose dWU by svd of time and space (via covariance matrix of 61 by 61 samples)
     % this uses a "warm start" by remembering the W from the previous iteration
-    [W, U, mu] = mexSVDsmall2(Params, dWU, W, iC-1, iW-1, Ka, Kb);
+    if reproducible
+        [W, U, mu] = mexSVDsmall2r(Params, double(dWU), double(W), iC-1, iW-1, double(Ka), double(Kb));
+
+        % round to 6 decimal places
+        W = round(W * 2^roundpow2) / 2^roundpow2;
+        U = round(U * 2^roundpow2) / 2^roundpow2;
+        mu = round(mu * 2^roundpow2) / 2^roundpow2;
+    else
+        [W, U, mu] = mexSVDsmall2(Params, dWU, W, iC-1, iW-1, Ka, Kb);
+    end
 
     % UtU is the gram matrix of the spatial components of the low-rank SVDs
     % it tells us which pairs of templates are likely to "interfere" with each other
@@ -216,9 +242,21 @@ for ibatch = 1:niter
     % gets scores for the template fits to each spike (vexp), outputs the average of
     % waveforms assigned to each cluster (dWU0),
     % and probably a few more things I forget about
-    [st0, id0, x0, featW, dWU0, drez, nsp0, featPC, vexp] = ...
-        mexMPnu8(Params, dataRAW, single(U), single(W), single(mu), iC-1, iW-1, UtU, iList-1, ...
-        wPCA);
+    if reproducible
+        [st0, id0, x0, featW, dWU0, drez, nsp0, featPC, vexp] = ...
+            mexMPnu8r(Params, dataRAW, single(U), single(W), single(mu), iC-1, iW-1, UtU, iList-1, ...
+            wPCA);
+        % @djoshea: output of mexMPnu8 is reproducible if st0, id0, x0, featW, featPC, and vexp are
+        % sorted by [~, sortIdx] = sort(st0) along the appropriate nspikes dimension. The sort order doesn't affect
+        % subsequent processing though so it isn't strictly necessary, so we save time by doing the sorting once at end
+        
+        % round to # decimal places
+        dWU0 = round(dWU0 * 2^roundpow2) / 2^roundpow2;
+    else
+        [st0, id0, x0, featW, dWU0, drez, nsp0, featPC, vexp] = ...
+            mexMPnu8(Params, dataRAW, single(U), single(W), single(mu), iC-1, iW-1, UtU, iList-1, ...
+            wPCA);
+    end
 
     % Sometimes nsp can get transposed (think this has to do with it being
     % a single element in one iteration, to which elements are added
@@ -290,20 +328,38 @@ for ibatch = 1:niter
         Params(2) = Nfilt;
 
         % this adds new templates if they are detected in the residual
-        [dWU0,cmap] = mexGetSpikes2(Params, drez, wTEMP, iC-1); %#ok<ASGLU>
+        if reproducible
+            [dWU0, cmap, st, id] = mexGetSpikes2r(Params, drez, wTEMP, iC-1); %#ok<ASGLU>
+            % @djoshea for reproducibility, sort dWU by st, id
+            [~, sortIdx] = sortrows([st, id]);
+            dWU0 = double(dWU0(:, :, sortIdx));
+
+            % round to 6 decimal places
+            dWU0 = round(dWU0 * 2^roundpow2) / 2^roundpow2;
+
+            if size(dWU0, 3) > 0
+                % new templates need to be integrated into the same format as all templates
+                dWU0 = reshape(wPCA * (wPCA' * dWU0(:,:)), size(dWU0));
+                dWU = cat(3, dWU, dWU0);
+            end
+        else
+            [dWU0, cmap] = mexGetSpikes2(Params, drez, wTEMP, iC-1); %#ok<ASGLU>
+            if size(dWU0, 3) > 0
+                % new templates need to be integrated into the same format as all templates
+                dWU0 = double(dWU0);
+                dWU0 = reshape(wPCAd * (wPCAd' * dWU0(:,:)), size(dWU0));
+                dWU = cat(3, dWU, dWU0);
+            end
+        end
 
         if size(dWU0,3)>0
-            % new templates need to be integrated into the same format as all templates
-            dWU0 = double(dWU0);
-            dWU0 = reshape(wPCAd * (wPCAd' * dWU0(:,:)), size(dWU0)); % apply PCA for smoothing purposes
-            dWU = cat(3, dWU, dWU0);
-
             W(:,Nfilt + (1:size(dWU0,3)),:) = W0(:,ones(1,size(dWU0,3)),:); % initialize temporal components of waveforms
 
             nsp(Nfilt + (1:size(dWU0,3))) = ops.minFR * NT/ops.fs; % initialize the number of spikes with the minimum allowed
             mu(Nfilt + (1:size(dWU0,3)))  = 10; % initialize the amplitude of this spike with a lowish number
 
             Nfilt = min(ops.Nfilt, size(W,2)); % if the number of filters exceed the maximum allowed, clip it
+
             Params(2) = Nfilt;
 
             W   = W(:, 1:Nfilt, :); % remove any new filters over the maximum allowed
@@ -342,22 +398,23 @@ for ibatch = 1:niter
            st3(2*size(st3,1), 1)   = 0;  %#ok<AGROW>
         end
 
-        st3(irange,1) = double(st); % spike times
-        st3(irange,2) = double(id0+1); % spike clusters (1-indexing)
-        st3(irange,3) = double(x0); % template amplitudes
-        st3(irange,4) = double(vexp); % residual variance of this spike
-        st3(irange,5) = korder; % batch from which this spike was found
+        st3(irange,1) = double(st); %#ok<AGROW> % spike times
+        st3(irange,2) = double(id0+1); %#ok<AGROW> % spike clusters (1-indexing)
+        st3(irange,3) = double(x0); %#ok<AGROW> % template amplitudes
+        st3(irange,4) = double(vexp); %#ok<AGROW> % residual variance of this spike
+        st3(irange,5) = korder; %#ok<AGROW> % batch from which this spike was found
 
-        fW(:, irange) = gather(featW); % template features for this batch
-        fWpc(:, :, irange) = gather(featPC); % PC features
+        fW(:, irange) = gather(featW); %#ok<AGROW> % template features for this batch
+        fWpc(:, :, irange) = gather(featPC); %#ok<AGROW> % PC features
 
         ntot = ntot + numel(x0); % keeps track of total number of spikes so far
     end
 
-    if ibatch==iter_finalize
+    if ibatch == iter_finalize
         % first iteration of final extraction pass
         % allocate variables when switching to extraction phase
         st3 = zeros(1e7, 5);
+        rez.dWU0A = zeros(nt0, Nchan, Nfilt, nBatches, 'single'); % spike average by template, by batch
         rez.dWUA = zeros(nt0, Nchan, Nfilt, nBatches, 'single'); % spike average by template, by batch
 
         % these next three store the low-d template decompositions
@@ -430,6 +487,12 @@ toc
 st3 = st3(1:ntot, :);
 fW = fW(:, 1:ntot);
 fWpc = fWpc(:,:, 1:ntot);
+
+if reproducible
+    [st3, sortIdx] = sortrows(st3);
+    fW = fW(:, sortIdx);
+    fWpc = fWpc(:, :, sortIdx);
+end
 
 rez.st3 = st3;
 rez.st2 = st3; % keep also an st2 copy, because st3 will be over-written by one of the post-processing steps

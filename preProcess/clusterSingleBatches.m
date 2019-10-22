@@ -4,10 +4,13 @@ function rez = clusterSingleBatches(rez)
 % the resulting cluster means are then compared for all pairs of batches, and a dissimilarity score is assigned to each pair
 % the matrix of similarity scores is then re-ordered so that low dissimilaity is along the diagonal
 
-
 rng('default'); rng(1);
 
 ops = rez.ops;
+reproducible = getOr(ops, 'reproducible', false);
+if reproducible
+    gpurng('default'); gpurng(1); % gpu rand funcs used inside initializeWdata2
+end
 
 if getOr(ops, 'reorder', 0)==0
     rez.iorig = 1:rez.temp.Nbatch; % if reordering is turned off, return consecutive order
@@ -50,7 +53,7 @@ for ibatch = 1:nBatches
 
     if size(uproj,2)>Nfilt
        % if a batch has at least as many spikes as templates we request, then cluster it
-        [W, mu, Wheights, irand] = initializeWdata2(call, uproj, Nchan, nPCs, Nfilt, iC); % this initialize the k-means
+        [W, mu, Wheights, irand] = initializeWdata2(call, uproj, Nchan, nPCs, Nfilt, iC); %#ok<ASGLU> % this initialize the k-means
 
         % Params is a whole bunch of parameters sent to the C++ scripts inside a float64 vector
         Params  = [size(uproj,2) NrankPC Nfilt 0 size(W,1) 0 NchanNear Nchan];
@@ -61,9 +64,14 @@ for ibatch = 1:nBatches
             iMatch = sq(min(abs(single(iC) - Wheights), [], 1))<.1; % this tells us which spikes and which clusters might match
 
             % get iclust and update W
-            [dWU, iclust, dx, nsp, dV] = mexClustering2(Params, uproj, W, mu, ...
-                call-1, iMatch, iC-1); % CUDA script to efficiently compute distances for pairs in which iMatch is 1
-
+            if reproducible
+                % @djoshea this version uses atomicAdd to ensure no detected spikes are missing from dWU
+                [dWU, iclust, dx, nsp, dV] = mexClustering2r(Params, uproj, W, mu, ...
+                    call-1, iMatch, iC-1); %#ok<ASGLU> % CUDA script to efficiently compute distances for pairs in which iMatch is 1
+            else
+                [dWU, iclust, dx, nsp, dV] = mexClustering2(Params, uproj, W, mu, ...
+                    call-1, iMatch, iC-1); %#ok<ASGLU> % CUDA script to efficiently compute distances for pairs in which iMatch is 1
+            end
             dWU = dWU./(1e-5 + single(nsp')); % divide the cumulative waveform by the number of spikes
 
             mu = sum(dWU.^2,1).^.5; % norm of cluster template
@@ -107,9 +115,8 @@ for ibatch = 1:nBatches
 end
 prog.finish();
 
-
 tic
-% anothr one of these Params variables transporting parameters to the C++ code
+% another one of these Params variables transporting parameters to the C++ code
 Params  = [1 NrankPC Nfilt 0 size(W,1) 0 NchanNear Nchan];
 Params(1) = size(Ws,3) * size(Ws,4); % the total number of templates is the number of templates per batch times the number of batches
 

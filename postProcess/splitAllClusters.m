@@ -9,6 +9,10 @@ function rez = splitAllClusters(rez, flag)
 % if markSplitsOnly is false, copies original template column 2 to 6 (if not present already) and splits template assignments in column st3_template_col
 ops = rez.ops;
 markSplitsOnly = getOr(ops, 'markSplitsOnly', false);
+
+reproducible = getOr(ops, 'reproducible', false);
+roundpow2 = 17;
+
 wPCA = gather(ops.wPCA);
 
 ccsplit = rez.ops.AUCsplit; % this is the threshold for splits, and is one of the main parameters users can change
@@ -273,8 +277,17 @@ Params     = double([0 Nfilt 0 0 size(rez.W,1) Nnearest ...
 
 % we need to re-estimate the spatial profiles
 [Ka, Kb] = getKernels(ops, 10, 1); % we get the time upsampling kernels again
-[rez.W, rez.U, rez.mu] = mexSVDsmall2(Params, rez.dWU, rez.W, iC-1, iW-1, Ka, Kb); % we run SVD
 
+if reproducible
+    [rez.W, rez.U, rez.mu] = mexSVDsmall2r(Params, double(gpuArray(rez.dWU)), double(gpuArray(rez.W)), iC-1, iW-1, double(Ka), double(Kb)); % we run SVD
+    
+    % round to 6 decimal places
+    rez.W = gather(round(rez.W * 2^roundpow2) / 2^roundpow2);
+    rez.U = gather(round(rez.U * 2^roundpow2) / 2^roundpow2);
+    rez.mu = gather(round(rez.mu * 2^roundpow2) / 2^roundpow2);
+else
+    [rez.W, rez.U, rez.mu] = mexSVDsmall2(Params, double(gpuArray(rez.dWU)), double(gpuArray(rez.W)), iC-1, iW-1, double(Ka), double(Kb)); % we run SVD
+end
 [WtW, iList] = getMeWtW(single(rez.W), single(rez.U), Nnearest); % we re-compute similarity scores between templates
 rez.iList = iList; % over-write the list of nearest templates
 
