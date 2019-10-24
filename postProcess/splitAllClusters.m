@@ -13,6 +13,13 @@ markSplitsOnly = getOr(ops, 'markSplitsOnly', false);
 reproducible = getOr(ops, 'reproducible', false);
 roundpow2 = 17;
 
+if ~isfield(rez, 'W_preSplit')
+    rez.dWU_preSplit = rez.dWU;
+    rez.W_preSplit = rez.W;
+    rez.U_preSplit = rez.U;
+    rez.mu_preSplit = rez.mu;
+end
+
 wPCA = gather(ops.wPCA);
 
 ccsplit = rez.ops.AUCsplit; % this is the threshold for splits, and is one of the main parameters users can change
@@ -21,25 +28,27 @@ NchanNear   = min(ops.Nchan, 32);
 Nnearest    = min(ops.Nchan, 32);
 sigmaMask   = ops.sigmaMask;
 
-if isfield(rez, 'st3_split_col')
-    % no need to initialize, already set
-    template_col = rez.st3_split_col;
-else
-    % splitAllClusters has not been called yet, use new column
-    template_col = size(rez.st3, 2) + 1;
 
-    if isfield(rez, 'st3_merge_col')
-        % has aready been merged, initialize based on merges
-        init_from_col = rez.st3_merge_col;
-    else
-        % has not been merged, initialize based on raw templates
-        init_from_col = rez.st3_template_col;
-    end
-    % initialze from current template_col
-    rez.st3(:, template_col) = rez.st3(:, init_from_col);
+% note on columns in st3:
+% - templates correspond to features defined in W, clusters correspond to spike classifications that may include 1 or more templates
+% - original templates live in column 2, this will also be the original cluster column
+% - column 6 will be used as the modifiable template column, column 7 will be used as the modifiable cluster column
+% - both split and merge will modify the current "cluster" column
+% - split will also modify the current template column, but merge will not 
+
+if rez.st3_template_col == 2
+    % need to create column 6
+    rez.st3(:, 6) = rez.st3(:, 2);
+    rez.st3_template_col = 6;
 end
-rez.st3_split_col = template_col;
-rez.st3_template_col = template_col;
+if rez.st3_cluster_col == 2
+    rez.st3(:, 7) = rez.st3(:, rez.st3_template_col);
+    rez.st3_cluster_col = 7;
+end
+
+% we'll modify both columns
+template_col = rez.st3_template_col;
+cluster_col = rez.st3_cluster_col;
 
 ik = 0;
 Nfilt = size(rez.W,2);
@@ -71,12 +80,12 @@ end
 if isfield(rez, 'splitdst')
     splitdst = rez.splitdst;
 else
-    splitdst = nan(Nfilt, 1);
+    splitdst = cell(Nfilt, 1);
 end
 if isfield(rez, 'splitauc')
     splitauc = rez.splitauc;
 else
-    splitauc = zeros(Nfilt, 1);
+    splitauc = cell(Nfilt, 1);
 end
 if isfield(rez, 'split_orig_template')
     split_orig_template = rez.split_orig_template;
@@ -99,7 +108,7 @@ while ik<Nfilt
     ik = ik+1;
     prog.update(ik);
 
-    isp = find(rez.st3(:,template_col)==ik); % get all spikes from this cluster, use template_col here since that's where splits will be registered
+    isp = find(rez.st3(:,cluster_col)==ik); % get all spikes from this cluster
     nSpikes = numel(isp);
     if  nSpikes<300
        continue; % do not split if fewer than 300 spikes (we cannot estimate cross-correlograms accurately)
@@ -170,9 +179,16 @@ while ik<Nfilt
             x = gather(clp * w);  % the new projections of the data onto this direction
         end
     end
+    
+    % update the probabilities with the final settings so they can be re-calculated for reextraction using the {w, mu, s, p} values stored in splitProj
+    logp(:,1) = -1/2*log(s1) - (x-mu1).^2/(2*s1) + log(p);
+    logp(:,2) = -1/2*log(s2) - (x-mu2).^2/(2*s2) + log(1-p);
+    lMax = max(logp,[],2);
+    logp = logp - lMax; % subtract the max for floating point accuracy
+    rs = exp(logp); % exponentiate the probabilities
+    rs = rs./sum(rs,2); % normalize so that probabilities sum to 1
 
     ilow = rs(:,1)>rs(:,2); % these spikes are assigned to cluster 1
-%     ps = mean(rs(:,1));
     plow = mean(rs(ilow,1)); % the mean probability of spikes assigned to cluster 1
     phigh = mean(rs(~ilow,2)); % same for cluster 2
     nremove = min(mean(ilow), mean(~ilow)); % the smallest cluster has this proportion of all spikes
@@ -205,7 +221,12 @@ while ik<Nfilt
         continue;
     end
 
-    splitauc(ik) = min(plow, phigh);
+    auc = min(plow, phigh);
+    if numel(splitauc) < ik || isempty(splitauc{ik})
+        splitauc{ik} = auc;
+    else
+        splitauc{ik} = cat(1, splitauc{ik}, auc);
+    end
 
     % finaly criteria to continue with the split: if the split piece is more than 5% of all spikes,
     % if the split piece is more than 300 spikes, and if the confidences for assigning spikes to
@@ -216,8 +237,13 @@ while ik<Nfilt
             continue;
         end
         
-        % store the splitting axes too
-        splitProj{ik} = struct('w', w, 'mu1', mu1, 'mu2', mu2, 's1', s1, 's2', s2, 'p', p);
+        % store the splitting axes too for reextraction
+        proj = struct('w', w, 'mu1', mu1, 'mu2', mu2, 's1', s1, 's2', s2, 'p', p);
+        if numel(splitProj) < ik || isempty(splitProj{ik})
+            splitProj{ik} = proj;
+        else
+            splitProj{ik} = cat(1, splitProj{ik}, proj);
+        end
 
         % actually do the split on the template, one template stays, one goes
         Nfilt = Nfilt + 1;
@@ -237,7 +263,7 @@ while ik<Nfilt
         split_candidate(Nfilt) = false;
 
         % we change the template assignments in column template_col
-        rez.st3(isp(ilow), template_col)    = Nfilt; % overwrite spike indices with the new index
+        rez.st3(isp(ilow), [template_col, cluster_col])    = Nfilt; % overwrite spike indices with the new index, both in template_col and cluster_col
         rez.simScore(:, Nfilt)   = rez.simScore(:, ik); % copy similarity scores from the original
         rez.simScore(Nfilt, :)   = rez.simScore(ik, :); % copy similarity scores from the original
         rez.simScore(ik, Nfilt) = 1; % set the similarity with original to 1
@@ -251,7 +277,11 @@ while ik<Nfilt
 
         % log the split
         splitsrc(Nfilt) = ik;
-        splitdst(ik) = Nfilt;
+        if numel(splitdst) < ik || isempty(splitdst{ik})
+            splitdst{ik} = Nfilt;
+        else
+            splitdst{ik} = cat(1, splitdst{ik}, Nfilt);
+        end
 
         % try this cluster again
         ik = ik-1; % the cluster piece that stays at this index needs to be tested for splits again before proceeding
@@ -271,11 +301,10 @@ rez.split_candidate = split_candidate;
 
 if markSplitsOnly
     splitsrc = nan(Nfilt, 1);
-    splitdst = nan(Nfilt, 1);
+    splitdst = cell(Nfilt, 1);
 else
     % zeros get filled in when the array is expanded
     splitsrc(splitsrc == 0) = NaN;
-    splitdst(splitdst == 0) = NaN;
 end
 
 Nfilt = size(rez.W,2); % new number of templates
@@ -285,12 +314,6 @@ Params     = double([0 Nfilt 0 0 size(rez.W,1) Nnearest ...
     Nrank 0 0 Nchan NchanNear ops.nt0min 0]); % make a new Params to pass on parameters to CUDA
 
 % we need to re-estimate the spatial profiles
-if ~isfield(rez, 'W_preSplit')
-    rez.W_preSplit = rez.W;
-    rez.U_preSplit = rez.U;
-    rez.mu_preSplit = rez.mu;
-end
-
 [Ka, Kb] = getKernels(ops, 10, 1); % we get the time upsampling kernels again
 
 if reproducible
@@ -321,14 +344,14 @@ rez.isplit = isplit; % keep track of origins for each cluster
 % ensure all merge and split arrays end up full size
 rez.split_orig_template = split_orig_template;
 rez.splitsrc = splitsrc;
-rez.splitdst = cat(1, splitdst, nan(Nfilt - numel(splitdst), 1));
-rez.splitauc = cat(1, splitauc, nan(Nfilt - numel(splitauc), 1));
+rez.splitdst = cat(1, splitdst, cell(Nfilt - numel(splitdst), 1));
+rez.splitauc = cat(1, splitauc, cell(Nfilt - numel(splitauc), 1));
 rez.splitProjections = cat(1, splitProj, cell(Nfilt - numel(splitProj), 1));
 if isfield(rez, 'mergecount')
     rez.mergecount = cat(1, rez.mergecount, zeros(Nfilt - numel(rez.mergecount), 1));
 end
 if isfield(rez, 'mergedst')
-    rez.mergedst = cat(1, rez.mergedst, zeros(Nfilt - numel(rez.mergedst), 1));
+    rez.mergedst = cat(1, rez.mergedst, nan(Nfilt - numel(rez.mergedst), 1));
 end
 
 % figure(1)

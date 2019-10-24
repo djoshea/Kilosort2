@@ -9,18 +9,26 @@ Xsim = rez.simScore; % this is the pairwise similarity score
 Nk = size(Xsim,1);
 Xsim = Xsim - diag(diag(Xsim)); % remove the diagonal of ones
 
-template_col = rez.st3_template_col;
-if isfield(rez, 'st3_merge_col')
-    % no need to initialize, already set
-    cluster_col = rez.st3_merge_col;
-else
-    % merge hasn't been called yet
-    cluster_col = size(rez.st3, 2) + 1;
-    % initialze from current template_col
-    rez.st3(:, cluster_col) = rez.st3(:, template_col);
+
+% note on columns in st3, this is copied from splitAllClusters
+% - templates correspond to features defined in W, clusters correspond to spike classifications that may include 1 or more templates
+% - original templates live in column 2, this will also be the original cluster column
+% - column 6 will be used as the modifiable template column, column 7 will be used as the modifiable cluster column
+% - both split and merge will modify the current "cluster" column
+% - split will also modify the current template column, but merge will not 
+
+if rez.st3_template_col == 2
+    % need to create column 6
+    rez.st3(:, 6) = rez.st3(:, 2);
+    rez.st3_template_col = 6;
 end
-rez.st3_merge_col = cluster_col;
-rez.st3_cluster_col = cluster_col;
+if rez.st3_cluster_col == 2
+    rez.st3(:, 7) = rez.st3(:, rez.st3_template_col);
+    rez.st3_cluster_col = 7;
+end
+
+% we'll modify only the cluster column
+cluster_col = rez.st3_cluster_col;
 
 if ~isfield(rez, 'mergecount')
     rez.mergecount = ones(Nk, 1);
@@ -67,22 +75,22 @@ for j = 1:Nk
             if Q<.2 && R<.05 % if both refractory criteria are met
                 i = ix(k);
                 % now merge isort(j) into i and move on
-                rez.st3(rez.st3(:, cluster_col)==isort(j), cluster_col) = i; % simply overwrite all the spikes of neuron j with i (i>j by construction)
+                rez.st3(rez.st3(:, cluster_col)==isort(j), cluster_col) = i; % simply overwrite all the spikes of cluster j with i (i>j by construction)
                 nspk(i) = nspk(i) + nspk(isort(j)); % update number of spikes for cluster i
 %                 fprintf('merged %d into %d \n', isort(j), i)
                 rez.mergecount(i) = rez.mergecount(i) + rez.mergecount(isort(j));
                 rez.mergecount(isort(j)) = 0;
                 rez.mergedst(isort(j)) = i;
-                if isfield(rez, 'splitdst') && isfield(rez, 'splitsrc')
-                    rez.splitdst(rez.splitdst == isort(j)) = i;
-                    if rez.splitsrc(i) == isort(j)
-                        % we're re-merging a split
-                        rez.splitsrc(i) = NaN;
-                    end
-                    rez.splitsrc(rez.splitsrc == isort(j)) = rez.splitsrc(i);
-                    rez.splitsrc(isort(j)) = NaN;
-                    rez.splitdst(isort(j)) = NaN;
-                end
+%                 if isfield(rez, 'splitdst') && isfield(rez, 'splitsrc')
+%                     rez.splitdst(rez.splitdst == isort(j)) = i;
+%                     if rez.splitsrc(i) == isort(j)
+%                         % we're re-merging a split
+%                         rez.splitsrc(i) = NaN;
+%                     end
+%                     rez.splitsrc(rez.splitsrc == isort(j)) = rez.splitsrc(i);
+%                     rez.splitsrc(isort(j)) = NaN;
+%                     rez.splitdst(isort(j)) = NaN;
+%                 end
 
                 % YOU REALLY SHOULD MAKE SURE THE PC CHANNELS MATCH HERE
                 nmerge = nmerge + 1;

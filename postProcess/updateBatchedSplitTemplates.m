@@ -8,8 +8,8 @@ reproducible = getOr(ops, 'reproducible', false);
 [nt0, Nfilt, Nrank] = size(rez.W);
 Nchan = ops.Nchan;
 nKeep = size(rez.W_a, 2); % how many PCs to keep
-Nfilt_new = Nfilt - size(rez.WA, 2);
-Nfilt_orig = size(rez.WA, 2);
+% Nfilt_new = Nfilt - size(rez.WA, 2);
+% Nfilt_orig = size(rez.WA, 2);
 
 % if Nfilt_new == 0
 %     return;
@@ -34,11 +34,6 @@ Params     = double([0 Nfilt 0 0 size(rez.W,1) Nnearest Nrank 0 0 Nchan NchanNea
 [Ka, Kb] = getKernels(ops, 10, 1);
 
 % template_mask = ~isnan(rez.splitdst) | ~isnan(rez.splitsrc);
-
-sz = size(rez.dWUA);
-% dWUA = rez.dWUA;
-% rez.dWUA = zeros([sz(1:2), Nfilt, nBatches], 'single');
-% W_start_nhalf = cat(2, double(gather(rez.W)), repmat(permute(wPCAd, [1 3 2]), [1, Nfilt_new, 1, nBatches])); % not on GPU
 W_start_nhalf = rez.W;
 
 rez.WA_split = zeros([nt0, Nfilt, Nrank, nBatches], 'single');
@@ -70,7 +65,7 @@ pc_batch_cluster_avgs = reshape(wPCAd * reshape(batch_cluster_avgs, [Nrank, Ncha
     [nt0, NchanNear, Nfilt, nBatches]);
 
 % function to compute single batch dWU
-dWU_batch = zeros([sz(1:2), Nfilt], 'double', 'gpuArray');
+dWU_batch = zeros([nt0, Nchan, Nfilt], 'double', 'gpuArray');
 function computeUpdateSingleBatch(ibatch)
     dWU_batch(:) = 0;
     for ik = 1:Nfilt  

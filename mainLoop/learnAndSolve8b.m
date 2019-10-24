@@ -377,8 +377,8 @@ for ibatch = 1:niter
         % we memorize the spatio-temporal decomposition of the waveforms at this batch
         % this is currently only used in the GUI to provide an accurate reconstruction
         % of the raw data at this time
-        rez.dWU0A(:,:,:,k) = gather(dWU0);
-        rez.dWUA(:,:,:,k) = gather(dWU);
+%         rez.dWU0A(:,:,:,k) = gather(dWU0);
+%         rez.dWUA(:,:,:,k) = gather(dWU);
         rez.WA(:,:,:,k) = gather(W);
         rez.UA(:,:,:,k) = gather(U);
         rez.muA(:,k) = gather(mu);
@@ -415,8 +415,8 @@ for ibatch = 1:niter
         % first iteration of final extraction pass
         % allocate variables when switching to extraction phase
         st3 = zeros(1e7, 5);
-        rez.dWU0A = zeros(nt0, Nchan, Nfilt, nBatches, 'single'); % spike average by template, by batch
-        rez.dWUA = zeros(nt0, Nchan, Nfilt, nBatches, 'single'); % spike average by template, by batch
+%         rez.dWU0A = zeros(nt0, Nchan, Nfilt, nBatches, 'single'); % spike average by template, by batch
+%         rez.dWUA = zeros(nt0, Nchan, Nfilt, nBatches, 'single'); % spike average by template, by batch
 
         % these next three store the low-d template decompositions
         rez.WA = zeros(nt0, Nfilt, Nrank,nBatches,  'single');
@@ -540,14 +540,15 @@ for j = 1:Nfilt
     rez.U_b(:,:,j) = gather(C(:, 1:nKeep));
 end
 
-rez.iW = iW; % @djoshea not sure if needed for reextract yet
+rez.iW = iW;
 
+% initialize the column labels for merge and split
 rez.st3_template_col = 2;
 rez.st3_cluster_col = 2;
 
 rez.dWU = gather(rez.dWU);
 rez.nsp = gather(rez.nsp);
-rez.iW = gather(rez.iW);
+rez.iW_preSplit = gather(rez.iW);  % needed for reextract
 
 fprintf('Finished compressing time-varying templates \n')
 %%
