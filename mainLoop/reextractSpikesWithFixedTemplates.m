@@ -1,4 +1,4 @@
-function out = reextractSpikesWithAppliedMask(ks, varargin)
+function out = reextractSpikesWithFixedTemplates(ks, varargin)
 % the goal here is to re-do the spike extraction phase of Kilosort2 for specific windows of time, where we keep all the 
 % templates fixed as they were when KS2 was run on the file, but overwriting the data in these specific windows either 
 % with different data or by zeroing certain samples with a mask.  
@@ -19,6 +19,8 @@ assert(~isempty(ks.iW_preSplit));
 assert(~isempty(ks.W_batch_preSplit));
 assert(~isempty(ks.U_batch_preSplit));
 assert(~isempty(ks.mu_batch_preSplit));
+
+ks.load();
 
 ops = ks.ops;
 ops.chanMap = fullfile(ops.root,'chanMap.mat');
@@ -181,9 +183,16 @@ out.st3(:, 7) = out.st3(:, 2);
 out.st3_template_col = 6;
 out.st3_cluster_col = 7;
 
+assignin('base', 'rez_re_pre', out);
+
 % next, apply splits to templates using existing projection weights
-out = reapplyMerges(out, ks);
-out = reapplySplits(out, ks);
+if getOr(ops, 'djoSplitThenMerge', false)
+    out = reapplySplits(out, ks);
+    out = reapplyMerges(out, ks);
+else
+    out = reapplyMerges(out, ks);
+    out = reapplySplits(out, ks);
+end
 out = reapplyCutoffs(out, ks);
 
 end
