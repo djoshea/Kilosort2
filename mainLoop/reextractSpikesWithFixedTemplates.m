@@ -9,29 +9,60 @@ function out = reextractSpikesWithFixedTemplates(ks, varargin)
 % this will load back in our data to RAM (if ops.useRAM) or re-write it to the ops.fproc file
 
 p = inputParser();
-p.addParameter('rezDATA', [], @(x) true);
-p.addParameter('batch_inds', [], @(x) true);
-p.parse(varargin{:});
+p.addParameter('DATA', [], @(x) true);
+p.addParameter('batch_inds', [], @(x) true); % manually specify list / mask of batches to resort, if empty, all batches are used
 
-assert(~isempty(ks.W_preSplit));
-assert(~isempty(ks.U_preSplit));
-assert(~isempty(ks.iW_preSplit));
-assert(~isempty(ks.W_batch_preSplit));
-assert(~isempty(ks.U_batch_preSplit));
-assert(~isempty(ks.mu_batch_preSplit));
+% these are used to replace specific time windows in the raw data with 
+p.addParameter('data_replace_windows', zeros(0, 2), @(x) ismatrix(x) && size(x, 2) == 2);
+p.addParameter('data_replace', {}, @iscell);
+
+% if true, only spikes that occur within (data_replace_windows(:, 1) - pad_data_replace_windows(1)) : (data_replace_windows(:, 2) + pad_data_replace_windows(2)) will be returned 
+p.addParameter('spike_extract_windows', zeros(0, 2), @(x) ismatrix(x) && size(x, 2) == 2);
+p.parse(varargin{:});
+spike_extract_windows = p.Results.spike_extract_windows;
 
 ks.load();
+
+msg = 'KilosortDataset needs to have preSplit fields loaded to reextract spikes';
+assert(ks.hasPreSplitLoaded, msg);
+assert(~isempty(ks.W_preSplit), msg);
+assert(~isempty(ks.U_preSplit), msg);
+assert(~isempty(ks.iW_preSplit), msg);
+assert(~isempty(ks.W_batch_preSplit), msg);
+assert(~isempty(ks.U_batch_preSplit), msg);
+assert(~isempty(ks.mu_batch_preSplit), msg);
 
 ops = ks.ops;
 ops.chanMap = fullfile(ops.root,'chanMap.mat');
 
-if isempty(p.Results.rezDATA)
-    rez = preprocessDataSub(ops);
+% goal here is to load or re-load data such that batch_inds will match DATA along dim 3
+if isempty(p.Results.DATA) 
+     % if isempty(spike_extract_windows) all batches will be loaded
+     % otherwise only those batches with overlap will be loaded
+    rez = preprocessDataSub(ops, 'batch_inds', p.Results.batch_inds, ...
+        'data_replace_windows', p.Results.data_replace_windows, 'data_replace', p.Results.data_replace, ...         
+        'only_batches_overlapping_windows', spike_extract_windows);
     assignin('base', 'rez_re', rez);
     ops = rez.ops;
     DATA = rez.DATA;
+    if isfield(rez, 'DATA_batch_inds')
+        batch_inds = rez.DATA_batch_inds;
+    else
+        batch_inds = 1:ops.Nbatch;
+    end
+   
 else
-    DATA = p.Results.rezDATA;
+    if ~isempty(p.Results.data_replace)
+        warning('Assuming that DATA passed into reextractSpikesWithFixedTemplates has been pre-modified with %d data_replace segments', numel(p.Results.data_replace));
+    end
+    % preloaded DATA with no data_replace, okay to use as is and treat batch_inds as the associated batches if specified
+    DATA = p.Results.DATA;
+    if isempty(p.Results.batch_inds)
+        batch_inds = 1:ops.Nbatch;
+    else
+        batch_inds = p.Results.batch_inds;
+    end
+    
     ops.useRAM = true;
     
     % needed for getClosestChannels below
@@ -40,13 +71,8 @@ else
     rez.yc = coords(:, 2);
 end
 
-batch_inds = p.Results.batch_inds;
-if islogical(batch_inds)
-    assert(numel(batch_inds) == ks.nBatches);
-    batch_inds = find(batch_inds);
-elseif isempty(batch_inds)
-    batch_inds = 1:ks.nBatches;
-end
+assert(numel(batch_inds) == size(DATA, 3));
+nBatchesResort = numel(batch_inds);
 
 NrankPC = 6;  
 Nrank = 3;
@@ -95,32 +121,37 @@ iW = ks.iW_preSplit;
 wPCA = ops.wPCA;
 
 % first iteration of final extraction pass
-prog = ProgressBar(nBatches, 'Re-extracting modified batches');
+prog = ProgressBar(nBatchesResort, 'Re-extracting modified batches');
 
 ntot = 0;
 st3 = zeros(1e7, 5);
 fW  = zeros(Nnearest, 1e7, 'single');
 fWpc = zeros(NchanNear, Nrank, 1e7, 'single');
 
-for k = 1:nBatches
-    if ~ismember(k, batch_inds)
-        continue;
+for iibatch = 1:nBatchesResort
+    ibatch = batch_inds(iibatch);
+    
+    ioffset = ops.ntbuff;
+    if ibatch==1
+        ioffset = 0;
     end
+    toff = nt0min + t0 - ioffset + (NT-ops.ntbuff)*(ibatch-1);
     
     if ~ops.useRAM
-        offset = 2 * ops.Nchan*batchstart(k);
+        offset = 2 * ops.Nchan*batchstart(ibatch);
         fseek(fid, offset, 'bof');
         dat = fread(fid, [NT ops.Nchan], '*int16');
     else
-        dat = DATA(:, :, k);
+        dat = DATA(:, :, iibatch); % use iibatch since DATA dim 3 already matches batch_inds
     end
+
     dataRAW = single(gpuArray(dat))/ ops.scaleproc;
 
     Params(1) = size(dataRAW, 1); % update NT each loop in case we subset dataRAW
     
-    W = ks.W_batch_preSplit(:, :, :, k);
-    U = ks.U_batch_preSplit(:, :, :, k);
-    mu = ks.mu_batch_preSplit(:, k);
+    W = ks.W_batch_preSplit(:, :, :, ibatch);
+    U = ks.U_batch_preSplit(:, :, :, ibatch);
+    mu = ks.mu_batch_preSplit(:, ibatch);
     
     % this needs to change
     [UtU, maskU] = getMeUtU(iW, iC, mask, Nnearest, Nchan); %#ok<ASGLU>
@@ -129,32 +160,38 @@ for k = 1:nBatches
         mexMPnu8r(Params, dataRAW, single(U), single(W), single(mu), iC-1, iW-1, UtU, iList-1, ...
         wPCA); %#ok<ASGLU>
    
-    ioffset         = ops.ntbuff;
-    if k==1
-        ioffset         = 0;
-    end
-    toff = nt0min + t0 -ioffset + (NT-ops.ntbuff)*(k-1);        
-        
     st = toff + double(st0);
-    irange = ntot + (1:numel(x0));
-        
+    if ~isempty(spike_extract_windows)
+        % filter st to only include those that occur in a data replace windows
+        mask_st = any(st(:) >= spike_extract_windows(:, 1)' & st(:) <= spike_extract_windows(:, 2)', 2); % nSpikes x nWindows --> nSpikes
+        st = st(mask_st);
+        id0 = id0(mask_st);
+        x0 = x0(mask_st);
+        vexp = vexp(mask_st);
+        featW = featW(:, mask_st);
+        featPC = featPC(:, :, mask_st);
+    end
+    
+    % double the buffer size if needed
     if ntot+numel(x0)>size(st3,1)
        fW(:, 2*size(st3,1))    = 0;
        fWpc(:,:,2*size(st3,1)) = 0;
        st3(2*size(st3,1), 1)   = 0;
     end
-        
+    
+    % append new spikes to st3, fW, fWpc
+    irange = ntot + (1:numel(x0));
     st3(irange,1) = double(st);
     st3(irange,2) = double(id0+1);
     st3(irange,3) = double(x0);
     st3(irange,4) = double(vexp);
-    st3(irange,5) = find(k == ks.batch_sort_order);
+    st3(irange,5) = find(ibatch == ks.batch_sort_order);
 
     fW(:, irange) = gather(featW);
     fWpc(:, :, irange) = gather(featPC);
 
     ntot = ntot + numel(x0);
-    prog.update(k);
+    prog.update(iibatch);
 end
 prog.finish();
 
@@ -186,7 +223,7 @@ out.st3_cluster_col = 7;
 assignin('base', 'rez_re_pre', out);
 
 % next, apply splits to templates using existing projection weights
-if getOr(ops, 'djoSplitThenMerge', false)
+if getOr(ops, 'djoSplitThenMerge', false) || getOr(ops, 'splitThenMerge', false)
     out = reapplySplits(out, ks);
     out = reapplyMerges(out, ks);
 else
