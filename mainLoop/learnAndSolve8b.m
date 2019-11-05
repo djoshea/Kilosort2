@@ -223,9 +223,9 @@ for ibatch = 1:niter
 
     % decompose dWU by svd of time and space (via covariance matrix of 61 by 61 samples)
     % this uses a "warm start" by remembering the W from the previous iteration
+    [W, U, mu] = mexSVDsmall2(Params, double(dWU), double(W), iC-1, iW-1, double(Ka), double(Kb));
     if reproducible
-        [W, U, mu] = mexSVDsmall2r(Params, double(dWU), double(W), iC-1, iW-1, double(Ka), double(Kb));
-
+        
         % round to 6 decimal places
         W = round(W * 2^roundpow2) / 2^roundpow2;
         U = round(U * 2^roundpow2) / 2^roundpow2;
@@ -246,8 +246,8 @@ for ibatch = 1:niter
     % and probably a few more things I forget about
     if reproducible
         [st0, id0, x0, featW, dWU0, drez, nsp0, featPC, vexp] = ...
-            mexMPnu8r(Params, dataRAW, single(U), single(W), single(mu), iC-1, iW-1, UtU, iList-1, ...
-            wPCA);
+            mexMPnu8r(Params, single(dataRAW), single(U), single(W), single(mu), iC-1, iW-1, logical(UtU), iList-1, ...
+            single(wPCA));
         % @djoshea: output of mexMPnu8 is reproducible if st0, id0, x0, featW, featPC, and vexp are
         % sorted by [~, sortIdx] = sort(st0) along the appropriate nspikes dimension. The sort order doesn't affect
         % subsequent processing though so it isn't strictly necessary, so we save time by doing the sorting once at end
