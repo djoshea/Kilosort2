@@ -145,6 +145,7 @@ while ik<Nfilt
     logp = zeros(numel(isp), 2); % initialize matrix of log probabilities that each spike is assigned to the first or second cluster
 
     % do 50 pursuit iteration
+    is_okay = true;
     logP = nan(50, 1);
     for k = 1:50
         % for each spike, estimate its probability to come from either Gaussian cluster
@@ -166,6 +167,20 @@ while ik<Nfilt
 
         s1 = (rs(:,1)' * (x-mu1).^2 )/sum(rs(:,1)); % new estimates of variances
         s2 = (rs(:,2)' * (x-mu2).^2 )/sum(rs(:,2));
+        
+        if s1 == 0 || s2 == 0
+            % this means only 1 spike is left in one of the clusters typically,
+            % so we break here and avoid doing the split
+            if s1 == 0
+                s1 = 1e-6;
+                is_okay = false;
+            end
+            if s2 == 0
+                s2 = 1e-6;
+                is_okay = false;
+            end
+            break;
+        end
 
         if (k>10 && rem(k,2)==1)
             % starting at iteration 10, we start re-estimating the pursuit direction
@@ -174,6 +189,10 @@ while ik<Nfilt
             StS  = clp' * (clp .* (rs(:,1)/s1 + rs(:,2)/s2))/nSpikes; % these equations follow from the model
             StMu = clp' * (rs(:,1)*mu1/s1 + rs(:,2)*mu2/s2)/nSpikes;
 
+            if rank(StS) < size(StS, 2)
+                is_okay = false;
+                break;
+            end
             w = StMu'/StS; % this is the new estimate of the best pursuit direection
             w = normc(w'); % which we unit normalize
             x = gather(clp * w);  % the new projections of the data onto this direction
@@ -231,7 +250,7 @@ while ik<Nfilt
     % finaly criteria to continue with the split: if the split piece is more than 5% of all spikes,
     % if the split piece is more than 300 spikes, and if the confidences for assigning spikes to
     % both clusters exceeds a preset criterion ccsplit
-    if nremove > .05 && min(plow,phigh)>ccsplit && min(sum(ilow), sum(~ilow))>300
+    if is_okay && nremove > .05 && min(plow,phigh)>ccsplit && min(sum(ilow), sum(~ilow))>300
         split_candidate(ik) = true;
         if markSplitsOnly
             continue;
