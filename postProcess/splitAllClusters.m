@@ -189,7 +189,7 @@ while ik<Nfilt
             StS  = clp' * (clp .* (rs(:,1)/s1 + rs(:,2)/s2))/nSpikes; % these equations follow from the model
             StMu = clp' * (rs(:,1)*mu1/s1 + rs(:,2)*mu2/s2)/nSpikes;
 
-            if rank(StS) < size(StS, 2)
+            if any(isnan(StS(:))) || rank(StS) < size(StS, 2)
                 is_okay = false;
                 break;
             end
