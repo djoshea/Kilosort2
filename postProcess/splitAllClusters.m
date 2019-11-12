@@ -171,11 +171,11 @@ while ik<Nfilt
         if s1 == 0 || s2 == 0
             % this means only 1 spike is left in one of the clusters typically,
             % so we break here and avoid doing the split
-            if s1 == 0
+            if s1 == 0 || isnan(s1)
                 s1 = 1e-6;
                 is_okay = false;
             end
-            if s2 == 0
+            if s2 == 0 || isnan(s2)
                 s2 = 1e-6;
                 is_okay = false;
             end
@@ -336,7 +336,7 @@ Params     = double([0 Nfilt 0 0 size(rez.W,1) Nnearest ...
 [Ka, Kb] = getKernels(ops, 10, 1); % we get the time upsampling kernels again
 
 if reproducible
-    [rez.W, rez.U, rez.mu] = mexSVDsmall2r(Params, double(gpuArray(rez.dWU)), double(gpuArray(rez.W)), iC-1, iW-1, double(Ka), double(Kb)); % we run SVD
+    [rez.W, rez.U, rez.mu] = mexSVDsmall2(Params, double(gpuArray(rez.dWU)), double(gpuArray(rez.W)), iC-1, iW-1, double(Ka), double(Kb)); % we run SVD
     
     % round to 6 decimal places
     rez.W = gather(round(rez.W * 2^roundpow2) / 2^roundpow2);
