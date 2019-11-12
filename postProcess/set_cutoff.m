@@ -66,8 +66,12 @@ for j = 1:Nk
     % just mark it valid, we'll take care of clearing it later
     spike_valid(ix(vexp<=Th)) = false; % valid spikes are above the current threshold
     st = ss(vexp>Th); % take spikes above the current threshold
-    [K, Qi, Q00, Q01, rir] = ccg(st, st, 500, dt); % % compute the auto-correlogram with 500 bins at 1ms bins
-    Q = min(Qi/(max(Q00, Q01))); % this is a measure of refractoriness
+    if isempty(ss)
+        Q = 0;
+    else
+        [K, Qi, Q00, Q01, rir] = ccg(st, st, 500, dt); % % compute the auto-correlogram with 500 bins at 1ms bins
+        Q = min(Qi/(max(Q00, Q01))); % this is a measure of refractoriness
+    end
     rez.est_contam_rate(j) = Q; % this score will be displayed in Phy
     rez.Ths(j) = Th; % store the threshold for potential debugging
 
