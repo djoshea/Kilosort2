@@ -108,7 +108,7 @@ for iS = 1:numel(ischedule)
     end
 
     if reproducible
-        [WA_b, UA_b, muA_b] = mexSVDsmall2r(Params, double(dWU_smoothed), double(W_start), iC-1, iW-1, Ka, Kb);
+        [WA_b, UA_b, muA_b] = mexSVDsmall2(Params, double(dWU_smoothed), double(W_start), iC-1, iW-1, Ka, Kb);
     else
         [WA_b, UA_b, muA_b] = mexSVDsmall2(Params, double(dWU_smoothed), double(W_start), iC-1, iW-1, Ka, Kb);
     end
