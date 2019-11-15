@@ -24,7 +24,7 @@ dataRAW = dataRAW(:, chanMap); % subsample only good channels
 
 % subtract the mean from each channel
 if nargin > 3 && ~isempty(mask_distrust_for_mean_over_time)
-    dataRAW = dataRAW - mean(dataRAW(~mask_distrust_for_mean_over_time, :), 1); % only use "trusted" timepoints for the mean
+    dataRAW(~mask_distrust_for_mean_over_time, :) = dataRAW(~mask_distrust_for_mean_over_time, :) - mean(dataRAW(~mask_distrust_for_mean_over_time, :), 1); % only use "trusted" timepoints for the mean
 else
     dataRAW = dataRAW - mean(dataRAW, 1);
 end
