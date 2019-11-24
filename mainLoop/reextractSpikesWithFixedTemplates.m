@@ -223,7 +223,7 @@ out.st3_cluster_col = 7;
 assignin('base', 'rez_re_pre', out);
 
 % next, apply splits to templates using existing projection weights
-if getOr(ops, 'djoSplitThenMerge', false) || getOr(ops, 'splitThenMerge', false)
+if getOr(ops, 'splitThenMerge', false)
     out = reapplySplits(out, ks);
     out = reapplyMerges(out, ks);
 else
