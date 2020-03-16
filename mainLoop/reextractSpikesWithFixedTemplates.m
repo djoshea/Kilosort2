@@ -42,7 +42,7 @@ if isempty(p.Results.DATA)
     rez = preprocessDataSub(ops, 'batch_inds', p.Results.batch_inds, ...
         'data_replace_windows', p.Results.data_replace_windows, 'data_replace', p.Results.data_replace, ...         
         'only_batches_overlapping_windows', spike_extract_windows);
-    assignin('base', 'rez_re', rez);
+    %assignin('base', 'rez_re', rez);
     ops = rez.ops;
     DATA = rez.DATA;
     if isfield(rez, 'DATA_batch_inds')
@@ -220,7 +220,7 @@ out.st3(:, 7) = out.st3(:, 2);
 out.st3_template_col = 6;
 out.st3_cluster_col = 7;
 
-assignin('base', 'rez_re_pre', out);
+%assignin('base', 'rez_re_pre', out);
 
 % next, apply splits to templates using existing projection weights
 if getOr(ops, 'splitThenMerge', false)
