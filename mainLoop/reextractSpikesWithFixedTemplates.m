@@ -220,8 +220,6 @@ out.st3(:, 7) = out.st3(:, 2);
 out.st3_template_col = 6;
 out.st3_cluster_col = 7;
 
-%assignin('base', 'rez_re_pre', out);
-
 % next, apply splits to templates using existing projection weights
 if getOr(ops, 'splitThenMerge', false)
     out = reapplySplits(out, ks);
