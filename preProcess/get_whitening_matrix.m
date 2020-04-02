@@ -43,7 +43,8 @@ while ibatch<=Nbatch
     end
     NTthis = size(buff, 2);
 
-    datr    = gpufilter(buff, ops, rez.ops.chanMap); % apply filters and median subtraction
+    % apply filters and median subtraction, don't pass distrust_this_batch since it was already excluded above
+    datr    = gpufilter(buff, ops, rez.ops.chanMap); 
 
     CC        = CC + (datr' * datr)/NTthis; % sample covariance
 
